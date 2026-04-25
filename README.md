@@ -1,4 +1,4 @@
-# Soc Alert Deduplicator
+# SOC Alert Deduplicator
 
 A Python-based tool designed to reduce alert fatigue by clustering repetitive SOC alerts into incident-oriented summaries.
 
