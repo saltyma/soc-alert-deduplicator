@@ -1,22 +1,20 @@
 # SOC Alert Deduplicator - Concept Document
 
 ## 1. Problem Statement
-Alert Fatigue. NO! we are not talking about medical monitoring systems, we are talking about the SOC Alert Fatigue, which happens when InfoSec Analysts are overwhelmed by a high volume of security alerts. This doesn't just result in burnout of valuable SOC assets, but also drags down their response times and leads to overlooked threats, so we can imagine the scale of damage this overlooked problem can exacerbate.
+Alert Fatigue. We are not talking about medical monitoring systems, we are talking about the SOC Alert Fatigue, which happens when InfoSec Analysts are overwhelmed by a high volume of security alerts. This doesn't just result in burnout of valuable SOC assets, but also drags down their response times and leads to overlooked threats, so we can imagine the scale of damage this overlooked problem can exacerbate.
 The SOC Alert Deduplicator not only identifies this issue, but offers a solution that can significantly reduce the noise and improve clarity by grouping repeated or highly similar alerts into incident-oriented summaries.
 
 ## 2. Target Users
 ### SOC Analyst:
-The SOC Analyst is the main user that benifits from the tool, by relying on it to reduce repeated alerts into grouped incident summaries. Thus reducing the time of triage and focusing on unique and high level threats instead of reviewing the same activity multiple times.
+The SOC Analyst is the main user that benefits from the tool, by relying on it to reduce repeated alerts into grouped incident summaries. Thus reducing the time of triage and focusing on unique and high level threats instead of reviewing the same activity multiple times.
 
 ### SOC Admin / Detection Engineer
-A SOC Admin / Detection Engineer focuses on fine tuning the tool by configuring how alerts are grouped. they can adjust fields such as host, user, process name, file hash, event type, or severity depending on the SIEM sourse and operational needs.
+A SOC Admin / Detection Engineer focuses on fine tuning the tool by configuring how alerts are grouped. they can adjust fields such as host, user, process name, file hash, event type, or severity depending on the SIEM source and operational needs.
 
-### Platform Engineer
-A secondary Actor that takes care of loading the data into the tool, might need to gather the logs from different sources, organize it, and convert it to a compatible format to feed it to the deduplicator.
 
 ## 3. Project Goal
-The primary goal of this project is building a Python tool that feeds on JSON security alerts, normalizes important fields, groups duplicate or near-duplicate alerts, and outputs concise incident summaries.
-The first version focuses on batch processing local JSON files, nor real-timeSIEM integration.
+The primary goal of this project is building a Python tool that ingests JSON security alerts, normalizes important fields, groups duplicate or near-duplicate alerts, and outputs concise incident summaries.
+The first version focuses on batch processing local JSON files, nor real-time SIEM integration.
 
 ## 4. Scope
 Version 1 will include:
@@ -26,7 +24,7 @@ Version 1 will include:
 - Normalizing alert fields such as host, user, process name, and file hash
 - Grouping exact duplicates based on selected fields
 - Producing one incident summary per group
-- Saving grouped resullts to a JSON output file
+- Saving grouped results to a JSON output file
 - Providing demo input and expected output files
 - Including basic tests for parsing, grouping, and missing fields
 
@@ -53,7 +51,7 @@ Each alert should contain fields such as:
 | 'source' | Alert source, such as Wazuh, Sysmon, or mock SIEM | Yes |
 | 'host' | Affected machine or endpoint | Yes |
 | 'user' | User account related to the alert | No |
-| 'event_type' | Type of event or detection | Yes |
+| 'event_type' | Type of event or detection, ex: process_creation, failed_login, malware_detection | Yes |
 | 'process_name' | Process involved in the alert | No |
 | 'file_hash' | File hash if available | No |
 | 'severity' | Alert severity level | Yes |
@@ -110,6 +108,8 @@ Two alerts are grouped together if they have:
 
 This simple rule-based approach is explainable and easy to test.
 
+Ps: Version 1 does not yet apply a time-window constraint when grouping alerts.
+
 ### SIEM/Data Source Decision for V1
 Version 1 will use mock JSON alerts inspired by Wazuh and Sysmon-style fields.
 
@@ -141,11 +141,11 @@ Version 1 is successful if:
 - Missed grouping: true duplicates may remain separate if fields differ slightly
 - Missing fields may reduce grouping accuracy
 - Poor configuration may produce misleading incident summaries
-- Real SIAM alerts may use inconsistent field names
+- Real SIEM alerts may use inconsistent field names
 - Sensitive data must not be included in public demo files
 
 ## 12. Future Improvements
-- Include the process of gathering the raw data from multiple security resources such as firewalls, SIEMs, endpoits and converting the data into the right format that is compatible with the deduplicator tool, to feed the output directely to the tool, without manual interference of platform engineers. We are talking about a pipeline from the infosec tools to the deduplicator tool.
+- Add automated ingestion pipelines for collecting alerts from SIEMs, endpoints, firewalls, or log aggregation systems and converting them into a normalized format compatible with the deduplicator.
 - Add near-duplicate scoring instead of only exact matching
 - Add time-window based grouping
 - Support Wazuh exported alerts
