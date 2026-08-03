@@ -1,5 +1,12 @@
 {
-    "group_by": ["hosts", "user", "process_name", "file_hash"],
-    "case_sensitive": false,
-    "minimum_match_score": 1.0
+  "group_by": [
+    "host",
+    "user",
+    "event_type",
+    "process_name",
+    "file_hash"
+  ],
+  "case_sensitive": false,
+  "missing_value": "unknown",
+  "minimum_match_score": 1.0
 }
