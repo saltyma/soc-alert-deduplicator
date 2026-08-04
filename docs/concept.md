@@ -27,6 +27,7 @@ Version 1 will include:
 - Saving grouped results to a JSON output file
 - Providing demo input and expected output files
 - Including basic tests for parsing, grouping, and missing fields
+- Providing a local desktop interface for interactive triage and CSV export
 
 ## 5. Non-Goals
 Version 1 will not include:
@@ -150,9 +151,7 @@ Version 1 is successful if:
 - Add time-window based grouping
 - Support Wazuh exported alerts
 - Support Sysmon event samples
-- Add CSV output
 - Add CLI arguments
 - Add basic terminal table output
-- Add simple dashboard or Streamlit interface
 - Add severity-based prioritization
 - Add confidence score for each incident group

@@ -22,6 +22,31 @@ def test_run_pipeline_matches_benchmark_oracle_byte_for_byte(tmp_path: Path) -> 
     assert output.read_bytes() == EXPECTED_INCIDENTS.read_bytes()
 
 
+def test_run_pipeline_changes_grouping_without_code_changes(tmp_path: Path) -> None:
+    config = tmp_path / "event-only.json"
+    output = tmp_path / "incidents.json"
+    config.write_text(
+        json.dumps(
+            {
+                "group_by": ["event_type"],
+                "case_sensitive": False,
+                "missing_value": "unknown",
+                "minimum_match_score": 1.0,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    counts = run_pipeline(DEMO_ALERTS, config, output)
+    incidents = json.loads(output.read_text(encoding="utf-8"))
+
+    assert counts == (40, 6)
+    assert sum(incident["alert_count"] for incident in incidents) == 40
+    assert all(
+        tuple(incident["grouping_fields"]) == ("event_type",) for incident in incidents
+    )
+
+
 def test_main_reports_success_and_output_location(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

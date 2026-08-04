@@ -3,6 +3,7 @@ branch = True
 source = src/soc_alert_deduplicator
 omit =
     src/soc_alert_deduplicator/__main__.py
+    src/soc_alert_deduplicator/gui.py
 
 [report]
 fail_under = 95

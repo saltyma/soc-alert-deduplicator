@@ -210,3 +210,7 @@ __marimo__/
 # Custom
 data/raw*.json
 data/processed/*.json
+/output.json
+/incidents.csv
+/docs/demo/gui_demo_output.json
+pysidedeploy.spec

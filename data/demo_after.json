@@ -1,0 +1,416 @@
+[
+  {
+    "incident_id": "INC-001",
+    "alert_count": 8,
+    "grouping_fields": {
+      "host": "ws-001",
+      "user": "salma.lab",
+      "event_type": "malware_detection",
+      "process_name": "invoice_viewer.exe",
+      "file_hash": "a7f3c9d1e8b2456a9c01d02f5d33b71c4e8a6b9d2f1073c5e6a8b1d4f9c2e7a0"
+    },
+    "host": "ws-001",
+    "user": "salma.lab",
+    "event_type": "malware_detection",
+    "process_name": "invoice_viewer.exe",
+    "file_hash": "a7f3c9d1e8b2456a9c01d02f5d33b71c4e8a6b9d2f1073c5e6a8b1d4f9c2e7a0",
+    "severity": "high",
+    "first_seen": "2026-06-01T08:15:00Z",
+    "last_seen": "2026-06-01T08:29:00Z",
+    "alert_ids": [
+      "ALERT-0001",
+      "ALERT-0002",
+      "ALERT-0003",
+      "ALERT-0004",
+      "ALERT-0005",
+      "ALERT-0006",
+      "ALERT-0007",
+      "ALERT-0008"
+    ],
+    "summary": "8 malware_detection alerts grouped for host ws-001 and user salma.lab."
+  },
+  {
+    "incident_id": "INC-002",
+    "alert_count": 7,
+    "grouping_fields": {
+      "host": "srv-dc-01",
+      "user": "admin.local",
+      "event_type": "failed_login",
+      "process_name": "unknown",
+      "file_hash": "unknown"
+    },
+    "host": "srv-dc-01",
+    "user": "admin.local",
+    "event_type": "failed_login",
+    "process_name": "unknown",
+    "file_hash": "unknown",
+    "severity": "medium",
+    "first_seen": "2026-06-01T09:00:00Z",
+    "last_seen": "2026-06-01T09:06:00Z",
+    "alert_ids": [
+      "ALERT-0009",
+      "ALERT-0010",
+      "ALERT-0011",
+      "ALERT-0012",
+      "ALERT-0013",
+      "ALERT-0014",
+      "ALERT-0015"
+    ],
+    "summary": "7 failed_login alerts grouped for host srv-dc-01 and user admin.local."
+  },
+  {
+    "incident_id": "INC-003",
+    "alert_count": 5,
+    "grouping_fields": {
+      "host": "ws-002",
+      "user": "jdoe",
+      "event_type": "suspicious_powershell",
+      "process_name": "powershell.exe",
+      "file_hash": "1c8f4a72d9e306b5f2a741c8e5d094b36f1a8c2d7e4b905fa3c6d1e8b24759a0"
+    },
+    "host": "ws-002",
+    "user": "jdoe",
+    "event_type": "suspicious_powershell",
+    "process_name": "powershell.exe",
+    "file_hash": "1c8f4a72d9e306b5f2a741c8e5d094b36f1a8c2d7e4b905fa3c6d1e8b24759a0",
+    "severity": "critical",
+    "first_seen": "2026-06-01T10:00:00Z",
+    "last_seen": "2026-06-01T10:08:00Z",
+    "alert_ids": [
+      "ALERT-0016",
+      "ALERT-0017",
+      "ALERT-0018",
+      "ALERT-0019",
+      "ALERT-0020"
+    ],
+    "summary": "5 suspicious_powershell alerts grouped for host ws-002 and user jdoe."
+  },
+  {
+    "incident_id": "INC-004",
+    "alert_count": 4,
+    "grouping_fields": {
+      "host": "ws-003",
+      "user": "unknown",
+      "event_type": "malware_detection",
+      "process_name": "payroll_update.exe",
+      "file_hash": "5d9b2a71c4e8f6038a1db7c2e9f4506a3c8d1e7ba2f9d4056b3e8c1af7d2904e"
+    },
+    "host": "ws-003",
+    "user": "unknown",
+    "event_type": "malware_detection",
+    "process_name": "payroll_update.exe",
+    "file_hash": "5d9b2a71c4e8f6038a1db7c2e9f4506a3c8d1e7ba2f9d4056b3e8c1af7d2904e",
+    "severity": "high",
+    "first_seen": "2026-06-01T11:00:00Z",
+    "last_seen": "2026-06-01T11:06:00Z",
+    "alert_ids": [
+      "ALERT-0021",
+      "ALERT-0022",
+      "ALERT-0023",
+      "ALERT-0024"
+    ],
+    "summary": "4 malware_detection alerts grouped for host ws-003 and user unknown."
+  },
+  {
+    "incident_id": "INC-005",
+    "alert_count": 4,
+    "grouping_fields": {
+      "host": "ws-004",
+      "user": "unknown",
+      "event_type": "malware_detection",
+      "process_name": "payroll_update.exe",
+      "file_hash": "5d9b2a71c4e8f6038a1db7c2e9f4506a3c8d1e7ba2f9d4056b3e8c1af7d2904e"
+    },
+    "host": "ws-004",
+    "user": "unknown",
+    "event_type": "malware_detection",
+    "process_name": "payroll_update.exe",
+    "file_hash": "5d9b2a71c4e8f6038a1db7c2e9f4506a3c8d1e7ba2f9d4056b3e8c1af7d2904e",
+    "severity": "high",
+    "first_seen": "2026-06-01T11:01:00Z",
+    "last_seen": "2026-06-01T11:07:00Z",
+    "alert_ids": [
+      "ALERT-0025",
+      "ALERT-0026",
+      "ALERT-0027",
+      "ALERT-0028"
+    ],
+    "summary": "4 malware_detection alerts grouped for host ws-004 and user unknown."
+  },
+  {
+    "incident_id": "INC-006",
+    "alert_count": 1,
+    "grouping_fields": {
+      "host": "ws-001",
+      "user": "salma.lab",
+      "event_type": "malware_detection",
+      "process_name": "invoice_viewer.exe",
+      "file_hash": "0f4e2d8c7b1a9365e0d4c8b2a7f1593e6d0c4b8a2f7e1953d6c0a4b8e2f7195d"
+    },
+    "host": "ws-001",
+    "user": "salma.lab",
+    "event_type": "malware_detection",
+    "process_name": "invoice_viewer.exe",
+    "file_hash": "0f4e2d8c7b1a9365e0d4c8b2a7f1593e6d0c4b8a2f7e1953d6c0a4b8e2f7195d",
+    "severity": "high",
+    "first_seen": "2026-06-01T12:00:00Z",
+    "last_seen": "2026-06-01T12:00:00Z",
+    "alert_ids": [
+      "ALERT-0029"
+    ],
+    "summary": "1 malware_detection alert grouped for host ws-001 and user salma.lab."
+  },
+  {
+    "incident_id": "INC-007",
+    "alert_count": 1,
+    "grouping_fields": {
+      "host": "ws-001",
+      "user": "salma.lab",
+      "event_type": "process_creation",
+      "process_name": "invoice_viewer.exe",
+      "file_hash": "a7f3c9d1e8b2456a9c01d02f5d33b71c4e8a6b9d2f1073c5e6a8b1d4f9c2e7a0"
+    },
+    "host": "ws-001",
+    "user": "salma.lab",
+    "event_type": "process_creation",
+    "process_name": "invoice_viewer.exe",
+    "file_hash": "a7f3c9d1e8b2456a9c01d02f5d33b71c4e8a6b9d2f1073c5e6a8b1d4f9c2e7a0",
+    "severity": "medium",
+    "first_seen": "2026-06-01T12:10:00Z",
+    "last_seen": "2026-06-01T12:10:00Z",
+    "alert_ids": [
+      "ALERT-0030"
+    ],
+    "summary": "1 process_creation alert grouped for host ws-001 and user salma.lab."
+  },
+  {
+    "incident_id": "INC-008",
+    "alert_count": 1,
+    "grouping_fields": {
+      "host": "ws-002",
+      "user": "jdoe",
+      "event_type": "suspicious_powershell",
+      "process_name": "powershell.exe",
+      "file_hash": "8e2c6a40f1d5b9737c0e4a2d9f6158b3c7e0a4d2f8b19653e7c0a4d8b2f6195e"
+    },
+    "host": "ws-002",
+    "user": "jdoe",
+    "event_type": "suspicious_powershell",
+    "process_name": "powershell.exe",
+    "file_hash": "8e2c6a40f1d5b9737c0e4a2d9f6158b3c7e0a4d2f8b19653e7c0a4d8b2f6195e",
+    "severity": "high",
+    "first_seen": "2026-06-01T12:20:00Z",
+    "last_seen": "2026-06-01T12:20:00Z",
+    "alert_ids": [
+      "ALERT-0031"
+    ],
+    "summary": "1 suspicious_powershell alert grouped for host ws-002 and user jdoe."
+  },
+  {
+    "incident_id": "INC-009",
+    "alert_count": 1,
+    "grouping_fields": {
+      "host": "ws-002",
+      "user": "jdoe",
+      "event_type": "credential_access",
+      "process_name": "lsass_reader.exe",
+      "file_hash": "4b7e1c95a2d8f6039e4b0c7a5d1f8263b9e4c0a7d2f81653e9b4c0a7d5f2186e"
+    },
+    "host": "ws-002",
+    "user": "jdoe",
+    "event_type": "credential_access",
+    "process_name": "lsass_reader.exe",
+    "file_hash": "4b7e1c95a2d8f6039e4b0c7a5d1f8263b9e4c0a7d2f81653e9b4c0a7d5f2186e",
+    "severity": "critical",
+    "first_seen": "2026-06-01T12:30:00Z",
+    "last_seen": "2026-06-01T12:30:00Z",
+    "alert_ids": [
+      "ALERT-0032"
+    ],
+    "summary": "1 credential_access alert grouped for host ws-002 and user jdoe."
+  },
+  {
+    "incident_id": "INC-010",
+    "alert_count": 1,
+    "grouping_fields": {
+      "host": "srv-dc-01",
+      "user": "svc_backup",
+      "event_type": "failed_login",
+      "process_name": "unknown",
+      "file_hash": "unknown"
+    },
+    "host": "srv-dc-01",
+    "user": "svc_backup",
+    "event_type": "failed_login",
+    "process_name": "unknown",
+    "file_hash": "unknown",
+    "severity": "medium",
+    "first_seen": "2026-06-01T12:40:00Z",
+    "last_seen": "2026-06-01T12:40:00Z",
+    "alert_ids": [
+      "ALERT-0033"
+    ],
+    "summary": "1 failed_login alert grouped for host srv-dc-01 and user svc_backup."
+  },
+  {
+    "incident_id": "INC-011",
+    "alert_count": 1,
+    "grouping_fields": {
+      "host": "srv-file-01",
+      "user": "svc_backup",
+      "event_type": "network_connection",
+      "process_name": "curl.exe",
+      "file_hash": "9f3a7c10e5d2b8641a0f9c7e3d5b2186a4f0c9e7d3b52186a0f4c9e7d3b2581a"
+    },
+    "host": "srv-file-01",
+    "user": "svc_backup",
+    "event_type": "network_connection",
+    "process_name": "curl.exe",
+    "file_hash": "9f3a7c10e5d2b8641a0f9c7e3d5b2186a4f0c9e7d3b52186a0f4c9e7d3b2581a",
+    "severity": "medium",
+    "first_seen": "2026-06-01T12:50:00Z",
+    "last_seen": "2026-06-01T12:50:00Z",
+    "alert_ids": [
+      "ALERT-0034"
+    ],
+    "summary": "1 network_connection alert grouped for host srv-file-01 and user svc_backup."
+  },
+  {
+    "incident_id": "INC-012",
+    "alert_count": 1,
+    "grouping_fields": {
+      "host": "srv-file-01",
+      "user": "svc_backup",
+      "event_type": "process_creation",
+      "process_name": "backup_agent.exe",
+      "file_hash": "2a6d0f94c8e3157b9a2d6f0c4e8153b7a9d2f6c0e41857b3a9d2f6c0e418753b"
+    },
+    "host": "srv-file-01",
+    "user": "svc_backup",
+    "event_type": "process_creation",
+    "process_name": "backup_agent.exe",
+    "file_hash": "2a6d0f94c8e3157b9a2d6f0c4e8153b7a9d2f6c0e41857b3a9d2f6c0e418753b",
+    "severity": "low",
+    "first_seen": "2026-06-01T13:00:00Z",
+    "last_seen": "2026-06-01T13:00:00Z",
+    "alert_ids": [
+      "ALERT-0035"
+    ],
+    "summary": "1 process_creation alert grouped for host srv-file-01 and user svc_backup."
+  },
+  {
+    "incident_id": "INC-013",
+    "alert_count": 1,
+    "grouping_fields": {
+      "host": "ws-005",
+      "user": "salma.lab",
+      "event_type": "malware_detection",
+      "process_name": "invoice_viewer.exe",
+      "file_hash": "a7f3c9d1e8b2456a9c01d02f5d33b71c4e8a6b9d2f1073c5e6a8b1d4f9c2e7a0"
+    },
+    "host": "ws-005",
+    "user": "salma.lab",
+    "event_type": "malware_detection",
+    "process_name": "invoice_viewer.exe",
+    "file_hash": "a7f3c9d1e8b2456a9c01d02f5d33b71c4e8a6b9d2f1073c5e6a8b1d4f9c2e7a0",
+    "severity": "high",
+    "first_seen": "2026-06-01T13:10:00Z",
+    "last_seen": "2026-06-01T13:10:00Z",
+    "alert_ids": [
+      "ALERT-0036"
+    ],
+    "summary": "1 malware_detection alert grouped for host ws-005 and user salma.lab."
+  },
+  {
+    "incident_id": "INC-014",
+    "alert_count": 1,
+    "grouping_fields": {
+      "host": "ws-006",
+      "user": "unknown",
+      "event_type": "credential_access",
+      "process_name": "unknown",
+      "file_hash": "unknown"
+    },
+    "host": "ws-006",
+    "user": "unknown",
+    "event_type": "credential_access",
+    "process_name": "unknown",
+    "file_hash": "unknown",
+    "severity": "high",
+    "first_seen": "2026-06-01T13:20:00Z",
+    "last_seen": "2026-06-01T13:20:00Z",
+    "alert_ids": [
+      "ALERT-0037"
+    ],
+    "summary": "1 credential_access alert grouped for host ws-006 and user unknown."
+  },
+  {
+    "incident_id": "INC-015",
+    "alert_count": 1,
+    "grouping_fields": {
+      "host": "ws-006",
+      "user": "unknown",
+      "event_type": "failed_login",
+      "process_name": "unknown",
+      "file_hash": "unknown"
+    },
+    "host": "ws-006",
+    "user": "unknown",
+    "event_type": "failed_login",
+    "process_name": "unknown",
+    "file_hash": "unknown",
+    "severity": "medium",
+    "first_seen": "2026-06-01T13:30:00Z",
+    "last_seen": "2026-06-01T13:30:00Z",
+    "alert_ids": [
+      "ALERT-0038"
+    ],
+    "summary": "1 failed_login alert grouped for host ws-006 and user unknown."
+  },
+  {
+    "incident_id": "INC-016",
+    "alert_count": 1,
+    "grouping_fields": {
+      "host": "ws-002",
+      "user": "jdoe",
+      "event_type": "suspicious_powershell",
+      "process_name": "pwsh.exe",
+      "file_hash": "7c1e5a93d8f2046b9c3e7a1d5f8264b0c9e3a7d1f52864b0c9e3a7d1f528649b"
+    },
+    "host": "ws-002",
+    "user": "jdoe",
+    "event_type": "suspicious_powershell",
+    "process_name": "pwsh.exe",
+    "file_hash": "7c1e5a93d8f2046b9c3e7a1d5f8264b0c9e3a7d1f52864b0c9e3a7d1f528649b",
+    "severity": "high",
+    "first_seen": "2026-06-01T13:40:00Z",
+    "last_seen": "2026-06-01T13:40:00Z",
+    "alert_ids": [
+      "ALERT-0039"
+    ],
+    "summary": "1 suspicious_powershell alert grouped for host ws-002 and user jdoe."
+  },
+  {
+    "incident_id": "INC-017",
+    "alert_count": 1,
+    "grouping_fields": {
+      "host": "ws-002",
+      "user": "admin.local",
+      "event_type": "suspicious_powershell",
+      "process_name": "powershell.exe",
+      "file_hash": "1c8f4a72d9e306b5f2a741c8e5d094b36f1a8c2d7e4b905fa3c6d1e8b24759a0"
+    },
+    "host": "ws-002",
+    "user": "admin.local",
+    "event_type": "suspicious_powershell",
+    "process_name": "powershell.exe",
+    "file_hash": "1c8f4a72d9e306b5f2a741c8e5d094b36f1a8c2d7e4b905fa3c6d1e8b24759a0",
+    "severity": "high",
+    "first_seen": "2026-06-01T13:50:00Z",
+    "last_seen": "2026-06-01T13:50:00Z",
+    "alert_ids": [
+      "ALERT-0040"
+    ],
+    "summary": "1 suspicious_powershell alert grouped for host ws-002 and user admin.local."
+  }
+]

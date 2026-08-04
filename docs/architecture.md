@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-The SOC Alert Deduplicator is a deterministic, local, batch-processing pipeline. It reads a JSON array and configuration, validates the inputs, normalizes only the fields required for grouping, creates exact-match groups, calculates incident metadata, and writes one JSON array of incident summaries.
+The SOC Alert Deduplicator is a deterministic, local, batch-processing pipeline with CLI and desktop presentation layers. It reads a JSON array and configuration, validates the inputs, normalizes only the fields required for grouping, creates exact-match groups, calculates incident metadata, and writes one JSON array of incident summaries.
 
 The design favors explainability over cleverness: standard Python data structures, pure transformations where practical, no network access, and no machine-learning or fuzzy-clustering behavior in v1.
 
@@ -33,6 +33,7 @@ Version 1 does not provide:
 ```mermaid
 flowchart LR
     Analyst["SOC analyst"] -->|"input, config, and output paths"| CLI["CLI / orchestrator"]
+    Analyst -->|"interactive triage"| GUI["Desktop dashboard"]
     Admin["SOC admin or detection engineer"] -->|"edits grouping policy"| ConfigFile["config.json"]
     InputFile["Raw alert JSON"] --> Loader["JSON loader and validator"]
     ConfigFile --> ConfigLoader["Configuration loader"]
@@ -47,6 +48,8 @@ flowchart LR
     Summarizer --> Writer["JSON writer"]
     Writer --> OutputFile["Grouped incident JSON"]
     OutputFile --> Analyst
+    OutputFile --> GUI
+    GUI --> CSVFile["Optional CSV export"]
 ```
 
 The smallest required pipeline remains:
@@ -87,6 +90,9 @@ src/soc_alert_deduplicator/
     normalization.py  # canonical grouping values
     deduplication.py  # ordered exact-key grouping
     summaries.py      # incident aggregation
+    exports.py        # optional analyst-friendly CSV export
+    gui.py            # desktop presentation and interaction only
+    assets/           # package-native vector artwork
 ```
 
 The project should start with Python dictionaries and standard-library modules. Pandas is unnecessary for a 40-record benchmark and would obscure the core grouping logic.
@@ -263,4 +269,3 @@ For `n` alerts and `k` grouping fields:
 - [Dataset design](dataset_design.md)
 - [Expected Phase 2 incidents](../data/demo/expected_incidents.json)
 - [Notion Phase 3 plan](https://app.notion.com/p/347ea4a7d0dd80f5ba8ece6eddbfe05b)
-
