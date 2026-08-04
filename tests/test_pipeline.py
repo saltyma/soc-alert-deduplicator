@@ -96,8 +96,8 @@ def test_main_returns_two_and_prints_concise_domain_error(
 def test_build_parser_applies_default_paths() -> None:
     args = build_parser().parse_args(["--input", "alerts.json"])
 
-    assert args.input == Path("alerts.json")
-    assert args.config == Path("config.json")
+    assert args.input == [Path("alerts.json")]
+    assert args.config is None
     assert args.output == Path("output.json")
 
 

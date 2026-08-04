@@ -1,85 +1,71 @@
-# Demo and Verification Guide
+# Demo and Verification
 
-## Claim being demonstrated
+## Adaptive sample
 
-Under the default grouping policy, 40 public-safe synthetic alerts become 17 deterministic incident summaries, reducing queue items by 57.5% while preserving every source alert ID exactly once.
-
-| Artifact | Role |
-|---|---|
-| [`data/demo_before.json`](../data/demo_before.json) | Recruiter-friendly before file |
-| [`data/demo_after.json`](../data/demo_after.json) | Reviewed after file and test oracle |
-| [`data/demo/raw_alerts.json`](../data/demo/raw_alerts.json) | Canonical research dataset |
-| [`data/demo/expected_incidents.json`](../data/demo/expected_incidents.json) | Canonical byte-for-byte oracle |
-
-The before/after aliases are exact copies of the canonical files. Tests verify the generated output against the canonical oracle.
-
-## Desktop demo
-
-```powershell
-pip install -e .
-soc-alert-deduplicator-gui --demo
-```
-
-The dashboard loads the verified files, writes `output.json`, and presents:
-
-- raw alert and incident counts;
-- queue reduction percentage;
-- highest incident severity;
-- a searchable, sortable, severity-filtered incident queue;
-- source alert IDs and normalized context for the selected incident; and
-- JSON and CSV export actions.
-
-![Verified dark dashboard](demo/gui-dashboard.png)
-
-## CLI demo
+The bundled 40-record sample becomes 17 SMART incidents with no configuration. All 40 alert IDs are preserved exactly once.
 
 ```powershell
 soc-alert-deduplicator `
-  --input data/demo_before.json `
-  --config config.json `
-  --output output.json
+  --input data/demo/raw_alerts.json `
+  --output output.v2.json
 ```
+
+Expected output:
 
 ```text
 Processed 40 alerts into 17 incidents.
-Output written to output.json.
+Output written to output.v2.json.
+SMART profile SP-...: json; 40-minute window.
+Profile written to output.v2.profile.json.
 ```
 
-Verify that the output is the reviewed result:
+Review the sidecar to see detected format, field coverage, inferred threshold, selected evidence, time window, warnings, and reduction.
+
+## Desktop walkthrough
 
 ```powershell
-Compare-Object `
-  (Get-Content output.json) `
-  (Get-Content data/demo_after.json)
+soc-alert-deduplicator-gui --demo
 ```
 
-No output means the files match line for line. The automated integration test is stricter and compares bytes directly.
+The desktop run demonstrates:
+
+- automatic format and schema detection;
+- inferred evidence fields and profile metadata;
+- alert, incident, reduction, and severity metrics;
+- numeric alert-count and confidence sorting;
+- search and severity filtering;
+- source/target process context and source IDs;
+- JSON output and safe CSV export; and
+- collapsible, scrollable controls with responsive queue layout.
+
+![Adaptive desktop dashboard](demo/gui-dashboard-v2.png)
+
+## Exact compatibility oracle
+
+The reviewed exact-policy benchmark remains available for compatibility tests:
+
+```powershell
+soc-alert-deduplicator `
+  --mode exact `
+  --input data/demo/raw_alerts.json `
+  --config config.json `
+  --output exact-output.json
+```
+
+`exact-output.json` must match `data/demo/expected_incidents.json` byte for byte. The suite also verifies that all 40 IDs appear exactly once.
 
 ## Scenario coverage
 
-The dataset includes:
+The sample contains repeated detections, casing and whitespace variations, omitted/null/blank optional values, near duplicates that should remain separate, unrelated records, hashes reused across hosts, and the full informational-to-critical severity range.
 
-- exact duplicates;
-- case and surrounding-whitespace variants;
-- omitted, null, and blank optional values;
-- near duplicates that must remain separate;
-- unrelated alerts;
-- repeated file hashes on different hosts; and
-- informational through critical severities.
+All sample identities, commands, hostnames, and hashes are fictional. It is a correctness fixture; use [the public raw-telemetry validation](real_data_test.md) for a larger ingestion and performance run.
 
-All people, hosts, commands, hashes, and detection names are fictional. See [Dataset Design](dataset_design.md) for the scenario-by-scenario oracle.
-
-## Screenshot reproduction
-
-The committed dashboard screenshot is rendered by the application itself:
+## Reproduce the screenshot
 
 ```powershell
 $env:PYTHONPATH = "src"
 $env:QT_QPA_PLATFORM = "offscreen"
 python -m soc_alert_deduplicator.gui `
   --demo `
-  --output docs/demo/gui_demo_output.json `
-  --screenshot docs/demo/gui-dashboard.png
+  --screenshot docs/demo/gui-dashboard-v2.png
 ```
-
-The screenshot path is optional during normal interactive use.

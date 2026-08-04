@@ -23,6 +23,7 @@ from PySide6.QtGui import (
     QFontDatabase,
     QIcon,
     QKeySequence,
+    QResizeEvent,
     QShortcut,
 )
 from PySide6.QtWidgets import (
@@ -39,6 +40,8 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPlainTextEdit,
     QPushButton,
+    QScrollArea,
+    QSizePolicy,
     QSplitter,
     QTableView,
     QVBoxLayout,
@@ -50,6 +53,8 @@ from .deduplication import group_alerts
 from .errors import DeduplicatorError
 from .exports import write_incidents_csv
 from .io import Alert, Incident, load_alerts, write_incidents
+from .smart_pipeline import SmartPipelineResult, run_smart_pipeline
+from .smart_profile import SmartProfile
 from .summaries import SEVERITY_RANK, build_incidents
 
 APP_NAME = "SOC Alert Deduplicator"
@@ -217,6 +222,10 @@ QScrollBar::handle:vertical {
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
     height: 0;
 }
+QScrollArea#controlScroll, QScrollArea#controlScroll > QWidget > QWidget {
+    background: transparent;
+    border: none;
+}
 QSplitter::handle {
     background: transparent;
     width: 8px;
@@ -297,12 +306,13 @@ class IncidentTableModel(QAbstractTableModel):
         ("Incident", "incident_id"),
         ("Severity", "severity"),
         ("Alerts", "alert_count"),
+        ("Confidence", "confidence"),
         ("Host", "host"),
-        ("User", "user"),
         ("Event", "event_type"),
         ("First seen", "first_seen"),
         ("Last seen", "last_seen"),
     )
+    SORT_ROLE = int(Qt.ItemDataRole.UserRole) + 1
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -348,21 +358,41 @@ class IncidentTableModel(QAbstractTableModel):
             return None
         incident = self._incidents[index.row()]
         key = self.COLUMNS[index.column()][1]
-        value = incident[key]
+        value = (
+            incident.get("deduplication", {}).get("confidence", 1.0)
+            if key == "confidence"
+            else incident[key]
+        )
 
         if role == Qt.ItemDataRole.DisplayRole:
             if key == "event_type":
                 return str(value).replace("_", " ")
+            if key == "confidence":
+                return f"{float(value):.0%}"
+            if key in {"first_seen", "last_seen"}:
+                timestamp = str(value)
+                return f"{timestamp[:10]} {timestamp[11:19]}Z"
             return str(value)
         if role == Qt.ItemDataRole.UserRole:
             return incident
+        if role == self.SORT_ROLE:
+            if key == "alert_count":
+                return int(value)
+            if key == "confidence":
+                return float(value)
+            if key == "severity":
+                return SEVERITY_RANK.get(str(value), -1)
+            return str(value).casefold()
         if role == Qt.ItemDataRole.ForegroundRole and key == "severity":
             return QColor(SEVERITY_COLORS.get(str(value), "#E8ECF4"))
         if role == Qt.ItemDataRole.FontRole and key in {"incident_id", "severity"}:
             font = QFont()
             font.setBold(True)
             return font
-        if role == Qt.ItemDataRole.TextAlignmentRole and key == "alert_count":
+        if role == Qt.ItemDataRole.TextAlignmentRole and key in {
+            "alert_count",
+            "confidence",
+        }:
             return Qt.AlignmentFlag.AlignCenter
         return None
 
@@ -375,6 +405,7 @@ class IncidentFilterProxy(QSortFilterProxyModel):
         self._query = ""
         self._severity = "all"
         self.setDynamicSortFilter(True)
+        self.setSortRole(IncidentTableModel.SORT_ROLE)
 
     def set_query(self, query: str) -> None:
         self._query = query.strip().casefold()
@@ -449,11 +480,23 @@ class MainWindow(QMainWindow):
         self.alerts: list[Alert] = []
         self.incidents: list[Incident] = []
         self.settings: Settings | None = None
+        self.smart_profile: SmartProfile | None = None
+        self.smart_result: SmartPipelineResult | None = None
         self.last_error = ""
+        self._metric_columns = 0
+        self._table_toolbar_compact: bool | None = None
 
-        self.setWindowTitle(f"{APP_NAME} — Incident Clarity Console")
-        self.setMinimumSize(1180, 720)
-        self.resize(1440, 900)
+        self.setWindowTitle(f"{APP_NAME} — Adaptive Incident Console")
+        self.setMinimumSize(900, 620)
+        screen = QApplication.primaryScreen()
+        if screen is not None:
+            available = screen.availableGeometry()
+            self.resize(
+                min(1360, max(900, int(available.width() * 0.9))),
+                min(850, max(620, int(available.height() * 0.88))),
+            )
+        else:
+            self.resize(1360, 850)
         self.setAcceptDrops(True)
 
         icon_path = Path(__file__).with_name("assets") / "shield.svg"
@@ -475,12 +518,16 @@ class MainWindow(QMainWindow):
         root_layout.setSpacing(14)
         root_layout.addWidget(self._build_header(icon_path))
 
-        body = QSplitter(Qt.Orientation.Horizontal)
-        body.setChildrenCollapsible(False)
-        body.addWidget(self._build_sidebar())
-        body.addWidget(self._build_dashboard())
-        body.setSizes([310, 1080])
-        root_layout.addWidget(body, 1)
+        self.body = QSplitter(Qt.Orientation.Horizontal)
+        self.body.setChildrenCollapsible(True)
+        self.sidebar = self._build_sidebar()
+        self.dashboard = self._build_dashboard()
+        self.body.addWidget(self.sidebar)
+        self.body.addWidget(self.dashboard)
+        self.body.setStretchFactor(0, 0)
+        self.body.setStretchFactor(1, 1)
+        self.body.setSizes([320, 1040])
+        root_layout.addWidget(self.body, 1)
         self.setCentralWidget(root)
 
     def _build_header(self, icon_path: Path) -> QFrame:
@@ -504,17 +551,23 @@ class MainWindow(QMainWindow):
         eyebrow.setObjectName("eyebrow")
         title = QLabel("Incident Clarity Console")
         title.setObjectName("title")
-        subtitle = QLabel(
-            "Collapse repetitive alerts into deterministic, explainable incidents."
+        self.header_subtitle = QLabel(
+            "Automatic normalization and evidence-based incident grouping."
         )
-        subtitle.setObjectName("subtitle")
+        self.header_subtitle.setObjectName("subtitle")
         title_box.addWidget(eyebrow)
         title_box.addWidget(title)
-        title_box.addWidget(subtitle)
+        title_box.addWidget(self.header_subtitle)
         layout.addLayout(title_box)
         layout.addStretch()
 
-        self.status_pill = QLabel("●  READY  ·  OFFLINE")
+        self.control_toggle = QPushButton("Controls")
+        self.control_toggle.setCheckable(True)
+        self.control_toggle.setChecked(True)
+        self.control_toggle.setToolTip("Show or hide analysis controls")
+        layout.addWidget(self.control_toggle)
+
+        self.status_pill = QLabel("READY / OFFLINE")
         self.status_pill.setObjectName("statusPill")
         layout.addWidget(self.status_pill)
         return header
@@ -522,16 +575,28 @@ class MainWindow(QMainWindow):
     def _build_sidebar(self) -> QFrame:
         sidebar = QFrame()
         sidebar.setObjectName("sidebar")
-        sidebar.setMinimumWidth(290)
-        sidebar.setMaximumWidth(340)
-        layout = QVBoxLayout(sidebar)
-        layout.setContentsMargins(18, 18, 18, 18)
-        layout.setSpacing(12)
+        sidebar.setMinimumWidth(250)
+        sidebar.setMaximumWidth(420)
+        sidebar.setSizePolicy(
+            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding
+        )
+        shell = QVBoxLayout(sidebar)
+        shell.setContentsMargins(0, 0, 0, 0)
+        shell.setSpacing(0)
 
-        title = QLabel("Run configuration")
+        scroll = QScrollArea()
+        scroll.setObjectName("controlScroll")
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        controls = QWidget()
+        layout = QVBoxLayout(controls)
+        layout.setContentsMargins(18, 18, 18, 10)
+        layout.setSpacing(11)
+
+        title = QLabel("Analysis controls")
         title.setObjectName("sectionTitle")
         description = QLabel(
-            "Choose local JSON and policy files. Processing never leaves this machine."
+            "Choose local telemetry. SMART mode detects its format, schema, and matching profile automatically."
         )
         description.setProperty("muted", True)
         description.setWordWrap(True)
@@ -540,16 +605,27 @@ class MainWindow(QMainWindow):
         layout.addSpacing(5)
 
         self.input_path, self.input_button = self._path_field(
-            layout, "ALERT INPUT", "Select a JSON alert array"
+            layout,
+            "TELEMETRY INPUT",
+            "Select JSON, XML, CSV, CEF, LEEF, syslog, or text",
         )
+
+        strategy_label = QLabel("ANALYSIS MODE")
+        strategy_label.setObjectName("fieldLabel")
+        layout.addWidget(strategy_label)
+        self.strategy_combo = QComboBox()
+        self.strategy_combo.addItem("SMART / Automatic", "smart")
+        self.strategy_combo.addItem("Exact / Manual policy", "exact")
+        layout.addWidget(self.strategy_combo)
+
         self.config_path, self.config_button = self._path_field(
-            layout, "GROUPING POLICY", "Select config.json"
+            layout, "OPTIONAL TUNING", "Automatic — no file required"
         )
         self.output_path, self.output_button = self._path_field(
             layout, "JSON OUTPUT", "Choose output.json"
         )
 
-        chip_label = QLabel("ACTIVE GROUPING FIELDS")
+        chip_label = QLabel("INFERRED EVIDENCE FIELDS")
         chip_label.setObjectName("fieldLabel")
         layout.addWidget(chip_label)
         self.chip_container = QWidget()
@@ -561,16 +637,29 @@ class MainWindow(QMainWindow):
             ("host", "user", "event_type", "process_name", "file_hash")
         )
 
+        self.profile_note = QLabel("Profile will be inferred from the selected data.")
+        self.profile_note.setProperty("muted", True)
+        self.profile_note.setWordWrap(True)
+        layout.addWidget(self.profile_note)
         layout.addStretch()
-        self.demo_button = QPushButton("Load verified demo")
-        self.analyze_button = QPushButton("Analyze alerts  →")
+
+        scroll.setWidget(controls)
+        shell.addWidget(scroll, 1)
+
+        footer = QWidget()
+        footer_layout = QVBoxLayout(footer)
+        footer_layout.setContentsMargins(18, 8, 18, 18)
+        footer_layout.setSpacing(8)
+        self.demo_button = QPushButton("Load sample data")
+        self.analyze_button = QPushButton("Analyze telemetry")
         self.analyze_button.setObjectName("primaryButton")
-        self.run_note = QLabel("Ctrl+R to run  ·  Drop a JSON file anywhere")
+        self.run_note = QLabel("Ctrl+R to run  /  Drop files anywhere")
         self.run_note.setProperty("muted", True)
         self.run_note.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(self.demo_button)
-        layout.addWidget(self.analyze_button)
-        layout.addWidget(self.run_note)
+        footer_layout.addWidget(self.demo_button)
+        footer_layout.addWidget(self.analyze_button)
+        footer_layout.addWidget(self.run_note)
+        shell.addWidget(footer)
         return sidebar
 
     def _path_field(
@@ -596,20 +685,20 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(12)
 
-        metrics = QHBoxLayout()
-        metrics.setSpacing(10)
+        self.metrics_grid = QGridLayout()
+        self.metrics_grid.setSpacing(10)
         self.alert_metric = MetricCard("Raw alerts", "#62C6FF")
         self.incident_metric = MetricCard("Incidents", "#B393FF")
         self.reduction_metric = MetricCard("Noise reduced", "#58D7B9")
         self.severity_metric = MetricCard("Highest severity", "#FF8A4C")
-        for card in (
+        self.metric_cards = (
             self.alert_metric,
             self.incident_metric,
             self.reduction_metric,
             self.severity_metric,
-        ):
-            metrics.addWidget(card)
-        layout.addLayout(metrics)
+        )
+        layout.addLayout(self.metrics_grid)
+        self._arrange_metric_cards(4)
 
         content = QSplitter(Qt.Orientation.Vertical)
         content.setChildrenCollapsible(False)
@@ -619,6 +708,57 @@ class MainWindow(QMainWindow):
         layout.addWidget(content, 1)
         return dashboard
 
+    def _arrange_metric_cards(self, columns: int) -> None:
+        if columns == self._metric_columns:
+            return
+        while self.metrics_grid.count():
+            self.metrics_grid.takeAt(0)
+        for index, card in enumerate(self.metric_cards):
+            self.metrics_grid.addWidget(card, index // columns, index % columns)
+        for column in range(columns):
+            self.metrics_grid.setColumnStretch(column, 1)
+        self._metric_columns = columns
+
+    def resizeEvent(self, event: QResizeEvent) -> None:
+        super().resizeEvent(event)
+        if not hasattr(self, "dashboard"):
+            return
+        dashboard_width = max(
+            self.dashboard.width(),
+            self.width() - self.sidebar.width() - 60,
+        )
+        self._arrange_metric_cards(2 if dashboard_width < 820 else 4)
+        compact_table = dashboard_width < 840
+        self.table.setColumnHidden(6, compact_table)
+        self.table.setColumnHidden(7, compact_table)
+        self._arrange_table_toolbar(dashboard_width < 760)
+        self.header_subtitle.setVisible(self.width() >= 1020)
+
+    def _arrange_table_toolbar(self, compact: bool) -> None:
+        if self._table_toolbar_compact == compact:
+            return
+        for widget in (
+            self.table_title_box,
+            self.search_box,
+            self.severity_filter,
+            self.csv_button,
+        ):
+            self.table_toolbar.removeWidget(widget)
+        for column in range(4):
+            self.table_toolbar.setColumnStretch(column, 0)
+        if compact:
+            self.table_toolbar.addWidget(self.table_title_box, 0, 0, 1, 3)
+            self.table_toolbar.addWidget(self.search_box, 1, 0)
+            self.table_toolbar.addWidget(self.severity_filter, 1, 1)
+            self.table_toolbar.addWidget(self.csv_button, 1, 2)
+        else:
+            self.table_toolbar.addWidget(self.table_title_box, 0, 0)
+            self.table_toolbar.addWidget(self.search_box, 0, 1)
+            self.table_toolbar.addWidget(self.severity_filter, 0, 2)
+            self.table_toolbar.addWidget(self.csv_button, 0, 3)
+        self.table_toolbar.setColumnStretch(0 if compact else 1, 1)
+        self._table_toolbar_compact = compact
+
     def _build_table_card(self) -> QFrame:
         card = QFrame()
         card.setObjectName("tableCard")
@@ -626,8 +766,12 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(16, 16, 16, 16)
         layout.setSpacing(10)
 
-        toolbar = QHBoxLayout()
-        title_box = QVBoxLayout()
+        self.table_toolbar = QGridLayout()
+        self.table_toolbar.setHorizontalSpacing(10)
+        self.table_toolbar.setVerticalSpacing(8)
+        self.table_title_box = QWidget()
+        title_box = QVBoxLayout(self.table_title_box)
+        title_box.setContentsMargins(0, 0, 0, 0)
         title_box.setSpacing(1)
         title = QLabel("Incident queue")
         title.setObjectName("sectionTitle")
@@ -635,11 +779,9 @@ class MainWindow(QMainWindow):
         self.queue_note.setProperty("muted", True)
         title_box.addWidget(title)
         title_box.addWidget(self.queue_note)
-        toolbar.addLayout(title_box)
-        toolbar.addStretch()
 
         self.search_box = QLineEdit()
-        self.search_box.setPlaceholderText("Search incidents…")
+        self.search_box.setPlaceholderText("Search incidents")
         self.search_box.setClearButtonEnabled(True)
         self.search_box.setMaximumWidth(250)
         self.severity_filter = QComboBox()
@@ -647,10 +789,8 @@ class MainWindow(QMainWindow):
         self.severity_filter.setMinimumWidth(145)
         self.csv_button = QPushButton("Export CSV")
         self.csv_button.setEnabled(False)
-        toolbar.addWidget(self.search_box)
-        toolbar.addWidget(self.severity_filter)
-        toolbar.addWidget(self.csv_button)
-        layout.addLayout(toolbar)
+        layout.addLayout(self.table_toolbar)
+        self._arrange_table_toolbar(False)
 
         self.table = QTableView()
         self.table.setModel(self.proxy)
@@ -658,7 +798,7 @@ class MainWindow(QMainWindow):
         self.table.setSelectionBehavior(QTableView.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(QTableView.SelectionMode.SingleSelection)
         self.table.setSortingEnabled(True)
-        self.table.sortByColumn(0, Qt.SortOrder.AscendingOrder)
+        self.table.sortByColumn(2, Qt.SortOrder.DescendingOrder)
         self.table.setShowGrid(False)
         self.table.verticalHeader().setVisible(False)
         self.table.verticalHeader().setDefaultSectionSize(39)
@@ -667,7 +807,7 @@ class MainWindow(QMainWindow):
         for column in range(len(IncidentTableModel.COLUMNS)):
             mode = (
                 QHeaderView.ResizeMode.Stretch
-                if column in {3, 4, 5}
+                if column in {4, 5}
                 else QHeaderView.ResizeMode.ResizeToContents
             )
             header.setSectionResizeMode(column, mode)
@@ -715,7 +855,12 @@ class MainWindow(QMainWindow):
         detail_layout.addWidget(self.detail_summary, 0, 0, 1, 4)
         self.detail_values: dict[str, QLabel] = {}
         for column, (label, key) in enumerate(
-            (("HOST", "host"), ("USER", "user"), ("PROCESS", "process_name"))
+            (
+                ("HOST", "host"),
+                ("USER", "user"),
+                ("PROCESS", "process_name"),
+                ("TARGET", "target_process_name"),
+            )
         ):
             box = QVBoxLayout()
             heading = QLabel(label)
@@ -735,7 +880,7 @@ class MainWindow(QMainWindow):
         self.alert_ids.setMaximumHeight(64)
         ids_box.addWidget(ids_title)
         ids_box.addWidget(self.alert_ids)
-        detail_layout.addLayout(ids_box, 1, 3)
+        detail_layout.addLayout(ids_box, 2, 0, 1, 4)
         self.detail_content.setVisible(False)
         layout.addWidget(self.detail_content, 1)
         return card
@@ -745,6 +890,8 @@ class MainWindow(QMainWindow):
         self.config_button.clicked.connect(self._choose_config)
         self.output_button.clicked.connect(self._choose_output)
         self.demo_button.clicked.connect(self.load_demo)
+        self.strategy_combo.currentIndexChanged.connect(self._strategy_changed)
+        self.control_toggle.toggled.connect(self._toggle_sidebar)
         self.analyze_button.clicked.connect(self.analyze)
         self.search_box.textChanged.connect(self.proxy.set_query)
         self.severity_filter.currentIndexChanged.connect(self._severity_changed)
@@ -755,19 +902,32 @@ class MainWindow(QMainWindow):
 
         QShortcut(QKeySequence.StandardKey.Open, self, self._choose_input)
         QShortcut(QKeySequence("Ctrl+R"), self, lambda: self.analyze())
+        self._strategy_changed()
 
     def _set_default_paths(self) -> None:
         if self.project_root is None:
             return
-        self.input_path.setText("data/demo/raw_alerts.json")
-        self.config_path.setText("config.json")
-        self.output_path.setText("output.json")
+        real_source = Path(
+            "data/external/splunk_attack_data/T1003.001/raw/windows-sysmon_creddump.log"
+        )
+        self.input_path.setText(
+            str(real_source)
+            if (self.project_root / real_source).is_file()
+            else "data/demo/raw_alerts.json"
+        )
+        self.config_path.clear()
+        self.output_path.setText("output.v2.json")
+        self.strategy_combo.setCurrentIndex(0)
 
     def _resolved_path(self, value: str) -> Path:
         path = Path(value.strip())
         if path.is_absolute():
             return path
         return (self.project_root or Path.cwd()) / path
+
+    def _resolved_inputs(self) -> list[Path]:
+        values = [value.strip() for value in self.input_path.text().split(";")]
+        return [self._resolved_path(value) for value in values if value]
 
     def _show_group_fields(self, fields: Sequence[str]) -> None:
         while self.chip_layout.count():
@@ -784,16 +944,22 @@ class MainWindow(QMainWindow):
             self.chip_layout.addWidget(chip, index // 2, index % 2)
 
     def _choose_input(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(
-            self, "Select alert input", self.input_path.text(), "JSON files (*.json)"
+        paths, _ = QFileDialog.getOpenFileNames(
+            self,
+            "Select telemetry input",
+            self.input_path.text().split(";", 1)[0],
+            (
+                "Security telemetry (*.json *.jsonl *.ndjson *.xml *.csv *.tsv "
+                "*.log *.txt *.cef *.leef *.syslog *.gz *.zip);;All files (*)"
+            ),
         )
-        if path:
-            self.input_path.setText(path)
+        if paths:
+            self.input_path.setText("; ".join(paths))
 
     def _choose_config(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
             self,
-            "Select grouping configuration",
+            "Select optional tuning configuration",
             self.config_path.text(),
             "JSON files (*.json)",
         )
@@ -809,27 +975,71 @@ class MainWindow(QMainWindow):
 
     def load_demo(self) -> bool:
         if self.project_root is None:
-            self._report_error("Demo files are unavailable outside a source checkout.")
+            self._report_error(
+                "Sample files are unavailable outside a source checkout."
+            )
             return False
         self._set_default_paths()
         return self.analyze()
 
+    def _strategy_changed(self) -> None:
+        smart = self.strategy_combo.currentData() == "smart"
+        self.config_path.setEnabled(not smart)
+        self.config_button.setEnabled(not smart)
+        self.config_path.setPlaceholderText(
+            "Automatic — no file required" if smart else "Select config.json"
+        )
+        if smart:
+            self.profile_note.setText(
+                "SMART will infer field coverage, evidence weights, threshold, and time window."
+            )
+
+    def _toggle_sidebar(self, visible: bool) -> None:
+        self.sidebar.setVisible(visible)
+        self.control_toggle.setText("Controls" if visible else "Show controls")
+
     def analyze(self, *, show_dialog: bool = True) -> bool:
-        input_path = self._resolved_path(self.input_path.text())
-        config_path = self._resolved_path(self.config_path.text())
+        input_paths = self._resolved_inputs()
         output_path = self._resolved_path(self.output_path.text())
-        self.status_pill.setText("●  ANALYZING")
+        self.status_pill.setText("ANALYZING")
         self.analyze_button.setEnabled(False)
         QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         try:
-            settings = load_settings(config_path)
-            alerts = load_alerts(input_path)
-            incidents = build_incidents(group_alerts(alerts, settings), settings)
-            write_incidents(
-                output_path,
-                incidents,
-                protected_paths=(input_path, config_path),
-            )
+            if not input_paths:
+                raise DeduplicatorError("Select at least one telemetry input file.")
+            if self.strategy_combo.currentData() == "smart":
+                tuning_path = (
+                    self._resolved_path(self.config_path.text())
+                    if self.config_path.isEnabled() and self.config_path.text().strip()
+                    else None
+                )
+                smart_result = run_smart_pipeline(
+                    input_paths,
+                    output_path,
+                    overrides_path=tuning_path,
+                )
+                alerts = smart_result.alerts
+                incidents = smart_result.incidents
+                settings = None
+            else:
+                if len(input_paths) != 1:
+                    raise DeduplicatorError(
+                        "Exact mode accepts one normalized JSON input file."
+                    )
+                if not self.config_path.text().strip():
+                    raise DeduplicatorError(
+                        "Exact mode requires a grouping policy file."
+                    )
+                config_path = self._resolved_path(self.config_path.text())
+                settings = load_settings(config_path)
+                alerts = load_alerts(input_paths[0])
+                incidents = build_incidents(group_alerts(alerts, settings), settings)
+                write_incidents(
+                    output_path,
+                    incidents,
+                    protected_paths=(input_paths[0], config_path),
+                )
+                smart_result = None
         except DeduplicatorError as exc:
             self._report_error(str(exc), show_dialog=show_dialog)
             return False
@@ -840,24 +1050,48 @@ class MainWindow(QMainWindow):
         self.alerts = alerts
         self.incidents = incidents
         self.settings = settings
+        self.smart_result = smart_result
+        self.smart_profile = smart_result.profile if smart_result is not None else None
         self.last_error = ""
         self.model.set_incidents(incidents)
-        self._show_group_fields(settings.group_by)
+        active_fields = (
+            self.smart_profile.similarity_fields
+            if self.smart_profile is not None
+            else settings.group_by
+            if settings is not None
+            else ()
+        )
+        self._show_group_fields(active_fields)
+        if self.smart_result is not None:
+            profile = self.smart_result.profile
+            formats = ", ".join(
+                sorted(
+                    {
+                        source.detected_format
+                        for source in self.smart_result.ingestion.sources
+                    }
+                )
+            )
+            self.profile_note.setText(
+                f"{profile.profile_id} / {formats} / "
+                f"threshold {profile.threshold:.2f} / "
+                f"{profile.time_window_minutes} min"
+            )
         self._update_metrics()
         self._refresh_severity_filter()
         self.csv_button.setEnabled(bool(incidents))
         self.open_button.setEnabled(True)
         self.queue_note.setText(
-            f"{len(incidents)} deterministic groups  ·  {len(alerts)} alerts preserved"
+            f"{len(incidents)} incident groups / {len(alerts)} records preserved"
         )
-        self.status_pill.setText("●  COMPLETE  ·  OFFLINE")
+        self.status_pill.setText("COMPLETE / OFFLINE")
         if incidents:
             self.table.selectRow(0)
         return True
 
     def _report_error(self, message: str, *, show_dialog: bool = True) -> None:
         self.last_error = message
-        self.status_pill.setText("●  ACTION REQUIRED")
+        self.status_pill.setText("ACTION REQUIRED")
         if show_dialog:
             QMessageBox.critical(self, "Analysis could not complete", message)
 
@@ -907,17 +1141,19 @@ class MainWindow(QMainWindow):
     def _show_incident(self, incident: Incident) -> None:
         self.empty_detail.setVisible(False)
         self.detail_content.setVisible(True)
+        confidence = float(incident.get("deduplication", {}).get("confidence", 1.0))
         self.detail_id.setText(
-            f"{incident['incident_id']}  ·  {str(incident['severity']).upper()}"
+            f"{incident['incident_id']}  /  {str(incident['severity']).upper()}  /  "
+            f"{confidence:.0%}"
         )
         self.detail_id.setStyleSheet(
             f"color: {SEVERITY_COLORS.get(str(incident['severity']), '#52D6B8')};"
         )
         self.detail_summary.setText(str(incident["summary"]))
         for key, label in self.detail_values.items():
-            label.setText(str(incident[key]))
+            label.setText(str(incident.get(key, "unknown")))
         self.alert_ids.setPlainText(
-            "  ·  ".join(str(value) for value in incident["alert_ids"])
+            " / ".join(str(value) for value in incident["alert_ids"])
         )
         self.copy_button.setEnabled(True)
 
@@ -940,15 +1176,14 @@ class MainWindow(QMainWindow):
                 path,
                 self.incidents,
                 protected_paths=(
-                    self._resolved_path(self.input_path.text()),
-                    self._resolved_path(self.config_path.text()),
+                    *self._resolved_inputs(),
                     self._resolved_path(self.output_path.text()),
                 ),
             )
         except DeduplicatorError as exc:
             self._report_error(str(exc), show_dialog=show_dialog)
             return False
-        self.status_pill.setText("●  CSV EXPORTED  ·  OFFLINE")
+        self.status_pill.setText("CSV EXPORTED / OFFLINE")
         return True
 
     def _open_output(self) -> None:
@@ -958,28 +1193,34 @@ class MainWindow(QMainWindow):
 
     def _copy_summary(self) -> None:
         QApplication.clipboard().setText(self.detail_summary.text())
-        self.status_pill.setText("●  SUMMARY COPIED")
+        self.status_pill.setText("SUMMARY COPIED")
 
     def dragEnterEvent(self, event: Any) -> None:
         urls = event.mimeData().urls() if event.mimeData().hasUrls() else []
-        if any(Path(url.toLocalFile()).suffix.casefold() == ".json" for url in urls):
+        if any(Path(url.toLocalFile()).is_file() for url in urls):
             event.acceptProposedAction()
 
     def dropEvent(self, event: Any) -> None:
+        paths: list[str] = []
         for url in event.mimeData().urls():
             path = Path(url.toLocalFile())
-            if path.suffix.casefold() == ".json":
-                self.input_path.setText(str(path))
-                event.acceptProposedAction()
-                break
+            if path.is_file():
+                paths.append(str(path))
+        if paths:
+            self.input_path.setText("; ".join(paths))
+            event.acceptProposedAction()
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=f"Launch the {APP_NAME} desktop UI.")
-    parser.add_argument("--input", type=Path, help="preselect an alert JSON file")
-    parser.add_argument("--config", type=Path, help="preselect a config JSON file")
+    parser.add_argument("--input", type=Path, help="preselect a telemetry file")
+    parser.add_argument(
+        "--config", type=Path, help="preselect a tuning or exact policy"
+    )
     parser.add_argument("--output", type=Path, help="preselect a JSON output path")
-    parser.add_argument("--demo", action="store_true", help="load and process the demo")
+    parser.add_argument(
+        "--demo", action="store_true", help="load and process sample data"
+    )
     parser.add_argument(
         "--screenshot", type=Path, help="save the rendered window as PNG"
     )
@@ -998,7 +1239,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             if font_path.is_file():
                 QFontDatabase.addApplicationFont(str(font_path))
     app.setApplicationName(APP_NAME)
-    app.setOrganizationName("SOC Portfolio Lab")
+    app.setOrganizationName("Local Security Tools")
     app.setStyle("Fusion")
     app.setFont(QFont("Segoe UI", 10))
     app.setStyleSheet(DARK_STYLESHEET)
@@ -1014,6 +1255,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         window.output_path.setText(str(args.output))
     if args.demo:
         window.analyze()
+
+    if args.screenshot:
+        window.resize(1360, 850)
 
     window.show()
     app.processEvents()

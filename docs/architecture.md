@@ -1,271 +1,130 @@
-# Version 1 Architecture
+# Architecture
 
-## Executive Summary
+## System boundary
 
-The SOC Alert Deduplicator is a deterministic, local, batch-processing pipeline with CLI and desktop presentation layers. It reads a JSON array and configuration, validates the inputs, normalizes only the fields required for grouping, creates exact-match groups, calculates incident metadata, and writes one JSON array of incident summaries.
-
-The design favors explainability over cleverness: standard Python data structures, pure transformations where practical, no network access, and no machine-learning or fuzzy-clustering behavior in v1.
-
-## 1. Design Goals
-
-- Produce the same incidents for the same ordered input and configuration.
-- Keep source data immutable while processing.
-- Make every grouping decision explainable from `config.json`.
-- Reject invalid required data rather than silently inventing it.
-- Normalize missing optional context without crashing.
-- Keep components small enough to test independently.
-- Match the Phase 2 benchmark exactly.
-
-## 2. Non-Goals
-
-Version 1 does not provide:
-
-- live Wazuh or SIEM ingestion;
-- a web interface or database;
-- fuzzy or machine-learning clustering;
-- campaign correlation across hosts;
-- a time-window constraint;
-- source-specific field mapping;
-- automated response actions.
-
-## 3. System Architecture
+SOC Alert Deduplicator is a local batch processor with two presentation layers: a command-line interface and a PySide6 desktop interface. Both call the same ingestion, validation, profiling, deduplication, and output modules. The application has no runtime network dependency and does not execute telemetry content.
 
 ```mermaid
-flowchart LR
-    Analyst["SOC analyst"] -->|"input, config, and output paths"| CLI["CLI / orchestrator"]
-    Analyst -->|"interactive triage"| GUI["Desktop dashboard"]
-    Admin["SOC admin or detection engineer"] -->|"edits grouping policy"| ConfigFile["config.json"]
-    InputFile["Raw alert JSON"] --> Loader["JSON loader and validator"]
-    ConfigFile --> ConfigLoader["Configuration loader"]
-    CLI --> Loader
-    CLI --> ConfigLoader
-    Loader --> Normalizer["Normalizer"]
-    ConfigLoader --> Normalizer
-    Normalizer --> Grouper["Exact-key deduplicator"]
-    ConfigLoader --> Grouper
-    Grouper --> Scorer["Exact-match scorer<br/>score = 1.0"]
-    Scorer --> Summarizer["Incident summarizer"]
-    Summarizer --> Writer["JSON writer"]
-    Writer --> OutputFile["Grouped incident JSON"]
-    OutputFile --> Analyst
-    OutputFile --> GUI
-    GUI --> CSVFile["Optional CSV export"]
+flowchart TB
+    CLI["CLI"] --> Pipeline["SMART pipeline"]
+    GUI["Desktop interface"] --> Pipeline
+    Files["Local telemetry"] --> Ingest["Universal ingestion"]
+    Ingest --> Validate["Normalized contract validation"]
+    Validate --> Profile["Adaptive profile inference"]
+    Profile --> Cluster["Identity-aware clustering"]
+    Cluster --> Summaries["Incident summaries"]
+    Summaries --> JSON["Atomic JSON output"]
+    Summaries --> GUI
+    GUI --> CSV["Safe CSV export"]
+    Pipeline --> Ingest
+    Pipeline --> Profile
+    Pipeline --> Cluster
+    Pipeline --> Summaries
 ```
 
-The smallest required pipeline remains:
+## Module responsibilities
 
-```text
-JSON -> Parser -> Normalizer -> Deduplicator -> Output
-```
-
-The implementation-level flow is:
-
-```text
-load -> clean -> group -> score -> summarize -> output
-```
-
-## 4. Component Responsibilities
-
-| Component | Responsibility | Must not do |
-|---|---|---|
-| CLI/orchestrator | Parse paths, call stages in order, set exit status | Contain grouping logic |
-| Configuration loader | Read and validate grouping fields and normalization settings | Mutate alerts |
-| JSON loader/validator | Decode UTF-8 JSON and validate the top-level/input contract | Normalize optional fields |
-| Normalizer | Produce canonical grouping values from a copy of each alert | Modify the original input objects |
-| Deduplicator | Build ordered groups from exact normalized tuples | Apply fuzzy similarity |
-| Exact-match scorer | Record `1.0` for an exact tuple match | Pretend partial matching exists |
-| Incident summarizer | Aggregate counts, times, IDs, grouping fields, and highest severity | Drop source alert references |
-| JSON writer | Serialize the complete result deterministically | Write partial output after an earlier failure |
-
-## 5. Proposed Package Boundaries
-
-Phase 4 can implement the design with small modules:
-
-```text
-src/soc_alert_deduplicator/
-    __init__.py
-    main.py           # CLI and orchestration
-    config.py         # configuration loading and validation
-    io.py             # alert loading, input validation, and output writing
-    normalization.py  # canonical grouping values
-    deduplication.py  # ordered exact-key grouping
-    summaries.py      # incident aggregation
-    exports.py        # optional analyst-friendly CSV export
-    gui.py            # desktop presentation and interaction only
-    assets/           # package-native vector artwork
-```
-
-The project should start with Python dictionaries and standard-library modules. Pandas is unnecessary for a 40-record benchmark and would obscure the core grouping logic.
-
-## 6. Input Contract
-
-The input is a UTF-8 JSON array. Every alert must contain:
-
-- `alert_id`
-- `timestamp`
-- `source`
-- `host`
-- `event_type`
-- `severity`
-
-Optional context includes `user`, `process_name`, `target_process_name`, `parent_process_name`, `command_line`, `file_hash`, `rule_name`, and `description`.
-
-Additional invariants:
-
-- `alert_id` values are unique strings.
-- `timestamp` values are ISO 8601 timestamps.
-- `severity` is one of `informational`, `low`, `medium`, `high`, or `critical`.
-- A present, nonblank `file_hash` in the demo is a 64-character hexadecimal SHA-256.
-- Unknown extra fields may be preserved or ignored, but must not change v1 grouping.
-
-## 7. Configuration Contract
-
-The default configuration is:
-
-```json
-{
-  "group_by": [
-    "host",
-    "user",
-    "event_type",
-    "process_name",
-    "file_hash"
-  ],
-  "case_sensitive": false,
-  "missing_value": "unknown",
-  "minimum_match_score": 1.0
-}
-```
-
-Validation rules:
-
-- `group_by` must be a nonempty list of unique supported field names.
-- `case_sensitive` must be boolean.
-- `missing_value` must be a nonempty string.
-- `minimum_match_score` must be numeric.
-- Version 1 accepts only an exact threshold of `1.0`; lower thresholds are reserved for later similarity logic.
-
-## 8. Normalization Contract
-
-For every configured grouping field:
-
-1. Read the value without mutating the raw alert.
-2. Treat an absent key or `null` as the configured missing value.
-3. Convert the value to text.
-4. Trim leading and trailing whitespace.
-5. Replace an empty result with the configured missing value.
-6. Lowercase it when `case_sensitive` is `false`.
-
-The ordered tuple of normalized values is the group key:
-
-```python
-(host, user, event_type, process_name, file_hash)
-```
-
-Fields such as command line and parent process remain evidence. They do not affect the v1 key.
-
-## 9. Grouping and Scoring
-
-A dictionary keyed by the normalized tuple provides explainable linear-time grouping. Python dictionaries preserve insertion order, so groups can be emitted in the order their first alert appears.
-
-For v1:
-
-- identical normalized tuples belong to the same incident;
-- different tuples belong to different incidents;
-- every accepted match has `match_score = 1.0`;
-- there is no partial score.
-
-The score stage exists as an explicit boundary so near-duplicate scoring can be added later without changing parsing, normalization, or output responsibilities.
-
-## 10. Incident-Summary Contract
-
-Each incident contains:
-
-- sequential `incident_id`, based on first group appearance;
-- `alert_count`;
-- normalized `grouping_fields`;
-- top-level normalized grouping values;
-- highest member `severity`;
-- earliest `first_seen`;
-- latest `last_seen`;
-- member `alert_ids` in input order;
-- a deterministic human-readable `summary`.
-
-Severity ordering is:
-
-```text
-informational < low < medium < high < critical
-```
-
-For the default Phase 2 benchmark, 40 alerts must produce 17 incidents identical to `data/demo/expected_incidents.json`.
-
-## 11. Error Behavior
-
-| Condition | Required behavior |
+| Module | Responsibility |
 |---|---|
-| Input/config file missing or unreadable | Stop with a concise path-specific error and nonzero exit status |
-| Malformed JSON | Stop and report JSON line/column when available |
-| Top-level JSON is not an array | Reject before grouping |
-| Required alert field missing | Reject and identify the record index and alert ID when available |
-| Duplicate `alert_id` | Reject before grouping |
-| Invalid timestamp, severity, or hash shape | Reject with the affected alert ID |
-| Optional field absent, `null`, or blank | Normalize it; do not fail |
-| Unsupported config field or threshold | Reject configuration before loading output |
-| Output cannot be written | Return nonzero; do not report success |
+| `universal_import.py` | Format detection, safe decoding, archive limits, field flattening, alias mapping, timestamp/severity normalization, provenance |
+| `io.py` | Normalized alert validation, duplicate-ID checks, timestamp parsing, protected paths, atomic JSON output |
+| `smart_profile.py` | Coverage and cardinality statistics, evidence-field selection, blocking fields, weights, threshold, continuity window, optional tuning |
+| `smart_deduplication.py` | Value normalization, evidence scoring, hard identity boundaries, candidate indexing, continuity checks, clustering, incident metadata |
+| `smart_pipeline.py` | End-to-end orchestration and profile sidecar generation |
+| `gui.py` | Responsive controls, queue model/view, numeric sorting, filtering, detail review, desktop actions |
+| `config.py`, `normalization.py`, `deduplication.py`, `summaries.py` | Backward-compatible exact-policy engine |
+| `raw_import.py` | Detailed Windows Event XML and CrowdStrike mappings reused by universal ingestion |
+| `exports.py` | Atomic CSV export and formula-injection neutralization |
 
-Errors should not echo full command lines or raw event bodies. The writer should create the final file only after all input has been processed successfully.
+## Ingestion pipeline
 
-## 12. Determinism and Complexity
+### Safe decoding
 
-Deterministic rules:
+The importer reads at most 256 MiB of expanded content per file. ZIP archives are limited to 128 members and 256 MiB total declared expansion. Encrypted members are rejected. Text decoding supports UTF-8 with or without BOM, validated UTF-16, and CP1252 fallback. Control-heavy or null-containing binary data is rejected.
 
-- input array order is authoritative;
-- incident order follows first group appearance;
-- alert IDs within an incident preserve input order;
-- `first_seen` and `last_seen` derive from timestamps;
-- JSON output uses stable indentation and a final newline.
+### Format detection
 
-For `n` alerts and `k` grouping fields:
+Detection uses file suffixes only when the suffix conveys a strong contract, such as `.jsonl`, `.tsv`, `.gz`, or `.zip`. Content markers distinguish JSON, XML, CEF, LEEF, RFC/BSD syslog, key-value logs, and plain text. Delimited inputs use Python's `csv.Sniffer` with a restricted delimiter set.
 
-- time complexity is `O(n × k)`;
-- memory complexity is `O(n)`;
-- `k` is small and configuration-bounded.
+RFC syslog priorities such as `<134>` are tested before XML parsing so they cannot be misclassified as tags. Windows Event XML uses the source-specific parser when its schema namespace is present; generic XML uses scalar descendants and repeated record elements.
 
-## 13. Security and Privacy Boundaries
+### Field mapping
 
-- Processing is local and requires no network connection.
-- The program never executes values found in alert fields.
-- Raw input objects remain unchanged.
-- Error messages avoid dumping sensitive evidence.
-- Demo data stays synthetic and public-safe.
-- Output is written only to the user-selected path.
-- Direct SIEM credentials and production connectivity remain out of scope.
+Records are flattened into dotted paths. The mapper indexes every useful suffix, allowing fields such as `_source.host.name`, `device.hostName`, and `hostname` to reach the same normalized host field. A documented alias table maps common identity, process, target, hash, event, severity, timestamp, and description names.
 
-## 14. Design Decisions and Tradeoffs
+Generated `AUTO-*` IDs are deterministic hashes of source provenance, record position, and canonical record content. Duplicate IDs across combined files receive a deterministic provenance suffix.
 
-| Decision | Benefit | Known cost |
-|---|---|---|
-| Exact tuple grouping | Explainable and testable | Misses fuzzy duplicates |
-| Include host in key | Prevents cross-endpoint over-grouping | Same campaign becomes several incidents |
-| Normalize missing values | Robust to sparse alerts | Several context-poor alerts may over-group |
-| Exclude command line from key | Avoids fragmentation from minor argument changes | Different commands may share an incident |
-| No time window | Keeps v1 small | Distant activity can group together |
-| Standard library and dictionaries | Transparent and lightweight | Fewer convenience abstractions |
+## Adaptive profile inference
 
-## 15. Phase 3 Acceptance Checklist
+For every normalized field, the profiler calculates:
 
-- [x] Architecture diagram documents inputs, processing stages, configuration, and output.
-- [x] Simple `load -> clean -> group -> score -> output` flow is defined.
-- [x] Component responsibilities and proposed module boundaries are explicit.
-- [x] Input, configuration, normalization, grouping, and output contracts are defined.
-- [x] Deterministic ordering and benchmark behavior are defined.
-- [x] Failure behavior and security boundaries are defined.
-- [x] Deferred functionality is kept outside v1.
+- coverage: the fraction of alerts with a usable value;
+- distinct ratio: unique values divided by populated values; and
+- repetition: the complement of distinct ratio.
 
-## References
+Fields with useful coverage become evidence fields. High-value identity attributes receive larger base weights. Blocking fields are selected from file hash, host, event type, source, and process when their coverage supports efficient candidate lookup.
 
-- [Project concept](concept.md)
-- [Data research](data_research.md)
-- [Dataset design](dataset_design.md)
-- [Expected Phase 2 incidents](../data/demo/expected_incidents.json)
-- [Notion Phase 3 plan](https://app.notion.com/p/347ea4a7d0dd80f5ba8ece6eddbfe05b)
+The threshold becomes stricter for sparse batches and slightly broader for high-coverage, repetitive batches. Median inter-event cadence produces a continuity window clamped to 5–120 minutes. Optional tuning can override these decisions, but ordinary use does not require a file.
+
+The inferred settings are serialized to a deterministic `SP-*` profile ID and written beside the output for review and reproduction.
+
+## Matching and clustering
+
+### Value normalization
+
+- text is trimmed, case-folded, and whitespace-collapsed;
+- process paths are reduced to the executable basename;
+- GUIDs, long hexadecimal values, and standalone numbers in command lines are replaced with stable tokens; and
+- long descriptions and command lines use token-set similarity rather than expensive character alignment.
+
+### Candidate blocking
+
+Alerts are processed in timestamp order. Candidate clusters are selected using strong compound keys such as host/event/process/target and host/hash. Index buckets are ordered by last activity, expired entries are removed, and candidates are capped. This avoids full pairwise comparison while keeping deterministic results.
+
+### Identity guards
+
+Host and file-hash disagreement are hard conflicts. Populated source-process and target-process names must match after basename normalization. Each cluster retains its first populated identity anchors so an early record with missing values cannot act as a bridge between different process families. Event identity, minimum evidence, continuity gap, and maximum cluster span provide additional boundaries.
+
+### Evidence score
+
+Available fields are scored independently. Missing values contribute neither positive nor negative weight. The match score is the weighted mean of similarities, adjusted for evidence coverage. A candidate must meet the minimum evidence count and threshold. The selected match records its contributing fields and confidence.
+
+Each alert belongs to exactly one cluster. Incident order follows the first input position represented by each cluster, preserving a stable analyst-facing sequence.
+
+## Output contract
+
+Each SMART incident includes:
+
+- incident ID and alert count;
+- host, user, process, target process, event, hash, and severity context;
+- first and last timestamps;
+- all source alert IDs;
+- human-readable summary;
+- `SMART` engine marker, profile ID, match type, confidence, evidence fields, and continuity window; and
+- contributing source formats.
+
+The adjacent profile document records detected input formats, paths, record counts, mapped fields, warnings, inferred profile values, and reduction metrics.
+
+## Desktop architecture
+
+The queue uses `QAbstractTableModel` and `QSortFilterProxyModel`. The source model exposes typed sort data through a dedicated role, so alert counts and confidence sort numerically while severity uses a defined rank. Filtering never mutates the incident list.
+
+Qt layouts, splitters, a scrollable control region, and width-aware rearrangement keep the application usable on compact displays. Timestamp columns hide below the useful-width threshold, metrics move from four columns to two, and queue controls stack into a second row. The sidebar can be collapsed entirely.
+
+## Determinism and failure behavior
+
+- No random choices are used.
+- Profile IDs derive from canonical inferred settings.
+- Auto alert IDs derive from canonical record/provenance content.
+- Sorting includes original position as a stable tie-breaker.
+- Input validation happens before output replacement.
+- Output writes use a temporary sibling file followed by atomic replacement.
+- Domain failures return concise messages and nonzero CLI status without printing raw records.
+
+## Scalability
+
+The core engine is designed around bounded candidate comparison rather than all-pairs matching. On the included 8,050-record validation corpus, the conservative profile produces 450 incidents in approximately 11 seconds on the development machine. Runtime still depends on field sizes, batch cadence, inferred blocks, and storage performance; no universal throughput guarantee is implied.
+
+## Compatibility mode
+
+The exact engine remains available with `--mode exact` and `config.json`. It preserves the reviewed 40-alert/17-incident oracle byte for byte. Exact mode is useful when an organization requires a fixed tuple policy rather than adaptive evidence scoring.

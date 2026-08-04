@@ -72,6 +72,23 @@ def test_incident_proxy_filters_by_text_and_severity() -> None:
     assert proxy.rowCount() == 1
 
 
+def test_incident_proxy_sorts_alert_counts_numerically() -> None:
+    incidents = benchmark_incidents()[:2]
+    incidents[0]["alert_count"] = 10
+    incidents[1]["alert_count"] = 2
+    model = IncidentTableModel()
+    model.set_incidents(incidents)
+    proxy = IncidentFilterProxy()
+    proxy.setSourceModel(model)
+
+    proxy.sort(2, Qt.SortOrder.AscendingOrder)
+
+    first = proxy.mapToSource(proxy.index(0, 2))
+    second = proxy.mapToSource(proxy.index(1, 2))
+    assert model.incident_at(first.row())["alert_count"] == 2
+    assert model.incident_at(second.row())["alert_count"] == 10
+
+
 def test_main_window_runs_demo_filters_and_exports(
     qtbot: QtBot, tmp_path: Path
 ) -> None:
@@ -92,8 +109,15 @@ def test_main_window_runs_demo_filters_and_exports(
     assert window.incident_metric.value.text() == "17"
     assert window.reduction_metric.value.text() == "57.5%"
     assert window.severity_metric.value.text() == "CRITICAL"
-    assert output.read_bytes() == EXPECTED_INCIDENTS.read_bytes()
-    assert window.detail_id.text().startswith("INC-001")
+    written = json.loads(output.read_text(encoding="utf-8"))
+    grouped_ids = [
+        alert_id for incident in written for alert_id in incident["alert_ids"]
+    ]
+    assert len(grouped_ids) == 40
+    assert len(set(grouped_ids)) == 40
+    assert all(incident["deduplication"]["engine"] == "SMART" for incident in written)
+    assert output.with_suffix(".profile.json").is_file()
+    assert window.detail_id.text().startswith("INC-")
 
     window.search_box.setText("credential_access")
     assert window.proxy.rowCount() == 2
@@ -117,8 +141,32 @@ def test_main_window_reports_input_error_without_mutating_queue(
     window.output_path.setText(str(tmp_path / "output.json"))
 
     assert not window.analyze(show_dialog=False)
-    assert "alert file not found" in window.last_error
+    assert "input file not found" in window.last_error
     assert window.model.rowCount() == 0
+
+
+def test_main_window_reflows_and_collapses_controls(qtbot: QtBot) -> None:
+    window = MainWindow(PROJECT_ROOT)
+    qtbot.addWidget(window)
+    window.show()
+
+    window.resize(900, 620)
+    QApplication.processEvents()
+    assert window._metric_columns == 2
+    assert window.table.isColumnHidden(6)
+    assert window.table.isColumnHidden(7)
+    assert window.analyze_button.isVisible()
+
+    window.resize(1360, 850)
+    QApplication.processEvents()
+    assert window._metric_columns == 4
+    assert not window.table.isColumnHidden(6)
+    assert not window.table.isColumnHidden(7)
+
+    window.control_toggle.click()
+    QApplication.processEvents()
+    assert not window.sidebar.isVisible()
+    assert window.control_toggle.text() == "Show controls"
 
 
 def test_gui_parser_accepts_launch_options() -> None:

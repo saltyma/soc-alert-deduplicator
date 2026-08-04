@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "soc-alert-deduplicator"
-version = "1.0.0"
-description = "Explainable local grouping of repetitive SOC alerts into incident summaries."
+version = "2.0.0"
+description = "Adaptive local normalization and evidence-based SOC alert deduplication."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
@@ -25,6 +25,7 @@ dependencies = ["PySide6>=6.8,<7"]
 soc-alert-deduplicator = "soc_alert_deduplicator.main:main"
 soc-alert-deduplicator-gui = "soc_alert_deduplicator.gui:main"
 soc-alert-import-raw = "soc_alert_deduplicator.raw_import:main"
+soc-alert-normalize = "soc_alert_deduplicator.universal_import:main"
 
 [tool.setuptools]
 package-dir = { "" = "src" }

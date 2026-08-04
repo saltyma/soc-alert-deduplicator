@@ -148,6 +148,12 @@ def load_alerts(path: Path) -> list[Alert]:
             f"alert input must be a JSON array, got {type(payload).__name__}"
         )
 
+    return validate_alerts(payload)
+
+
+def validate_alerts(payload: list[Any]) -> list[Alert]:
+    """Validate an in-memory alert array and return defensive copies."""
+
     alerts: list[Alert] = []
     seen_ids: set[str] = set()
     for index, item in enumerate(payload):
@@ -168,13 +174,14 @@ def load_alerts(path: Path) -> list[Alert]:
     return alerts
 
 
-def write_incidents(
+def write_json_document(
     path: Path,
-    incidents: list[Incident],
+    payload: Any,
     *,
     protected_paths: tuple[Path, ...] = (),
+    _output_kind: str = "JSON",
 ) -> None:
-    """Atomically write incidents without overwriting an input/config file."""
+    """Atomically write a JSON value without overwriting protected inputs."""
 
     resolved_output = path.resolve(strict=False)
     for protected in protected_paths:
@@ -203,18 +210,12 @@ def write_incidents(
             delete=False,
         ) as handle:
             temporary_path = Path(handle.name)
-            json.dump(
-                incidents,
-                handle,
-                ensure_ascii=False,
-                allow_nan=False,
-                indent=2,
-            )
+            json.dump(payload, handle, ensure_ascii=False, allow_nan=False, indent=2)
             handle.write("\n")
         temporary_path.replace(path)
     except (OSError, TypeError, ValueError) as exc:
         raise IncidentOutputError(
-            f"cannot write incident output {path}: {exc}"
+            f"cannot write {_output_kind} output {path}: {exc}"
         ) from exc
     finally:
         if temporary_path is not None and temporary_path.exists():
@@ -222,3 +223,19 @@ def write_incidents(
                 temporary_path.unlink()
             except OSError:
                 pass
+
+
+def write_incidents(
+    path: Path,
+    incidents: list[Incident],
+    *,
+    protected_paths: tuple[Path, ...] = (),
+) -> None:
+    """Atomically write incidents without overwriting an input/config file."""
+
+    write_json_document(
+        path,
+        incidents,
+        protected_paths=protected_paths,
+        _output_kind="incident",
+    )

@@ -70,7 +70,7 @@ def _read_config_object(path: Path) -> dict[str, Any]:
 
 
 def load_settings(path: Path) -> Settings:
-    """Load and validate the exact-match v1 configuration."""
+    """Load and validate the exact-match compatibility configuration."""
 
     payload = _read_config_object(path)
 
@@ -114,9 +114,7 @@ def load_settings(path: Path) -> Settings:
         raise ConfigurationError("minimum_match_score must be numeric")
     threshold = float(threshold)
     if threshold != 1.0:
-        raise ConfigurationError(
-            "version 1 supports exact matching only; minimum_match_score must be 1.0"
-        )
+        raise ConfigurationError("minimum_match_score must be 1.0 in exact mode")
 
     return Settings(
         group_by=tuple(group_by),

@@ -1,160 +1,53 @@
-# SOC Alert Deduplicator - Concept Document
+# Product Concept
 
-## 1. Problem Statement
-Alert Fatigue. We are not talking about medical monitoring systems, we are talking about the SOC Alert Fatigue, which happens when InfoSec Analysts are overwhelmed by a high volume of security alerts. This doesn't just result in burnout of valuable SOC assets, but also drags down their response times and leads to overlooked threats, so we can imagine the scale of damage this overlooked problem can exacerbate.
-The SOC Alert Deduplicator not only identifies this issue, but offers a solution that can significantly reduce the noise and improve clarity by grouping repeated or highly similar alerts into incident-oriented summaries.
+## Problem
 
-## 2. Target Users
-### SOC Analyst:
-The SOC Analyst is the main user that benefits from the tool, by relying on it to reduce repeated alerts into grouped incident summaries. Thus reducing the time of triage and focusing on unique and high level threats instead of reviewing the same activity multiple times.
+Security teams often receive repeated detections for the same short-lived activity while source formats, field names, timestamp conventions, and context quality vary across tools. Manual mapping and fixed grouping keys make a small deduplication utility brittle: every new source requires setup, and broad keys can conceal different activity.
 
-### SOC Admin / Detection Engineer
-A SOC Admin / Detection Engineer focuses on fine tuning the tool by configuring how alerts are grouped. they can adjust fields such as host, user, process name, file hash, event type, or severity depending on the SIEM source and operational needs.
+## Product decision
 
+SOC Alert Deduplicator uses an adaptive local pipeline:
 
-## 3. Project Goal
-The primary goal of this project is building a Python tool that ingests JSON security alerts, normalizes important fields, groups duplicate or near-duplicate alerts, and outputs concise incident summaries.
-The first version focuses on batch processing local JSON files, nor real-time SIEM integration.
+1. detect and decode common text telemetry formats;
+2. map flat or nested vendor fields into a stable alert contract;
+3. measure field coverage and repetition in the current batch;
+4. infer evidence fields, weights, threshold, blocking keys, and a continuity window;
+5. group alerts only when weighted evidence and identity boundaries agree; and
+6. expose the reasoning, source IDs, and inferred profile for analyst review.
 
-## 4. Scope
-Version 1 will include:
+The application reduces queue repetition; it does not suppress evidence, classify true positives, or automate response.
 
-- Loading alerts from a local JSON file
-- Reading configurable grouping fields from 'config.json'
-- Normalizing alert fields such as host, user, process name, and file hash
-- Grouping exact duplicates based on selected fields
-- Producing one incident summary per group
-- Saving grouped results to a JSON output file
-- Providing demo input and expected output files
-- Including basic tests for parsing, grouping, and missing fields
-- Providing a local desktop interface for interactive triage and CSV export
+## Primary users
 
-## 5. Non-Goals
-Version 1 will not include:
+- SOC analysts reviewing exported alert batches.
+- Detection engineers validating noisy rules or public attack datasets.
+- Security administrators comparing correlation behavior before SIEM implementation.
+- Engineering reviewers assessing parsing, validation, deterministic processing, safety, and desktop usability.
 
-- Real-time SIEM monitoring
-- Machine learning-based clustering
-- A web dashboard
-- Automatic incident response
-- Direct connection to production SIEM systems
-- Full support for every alert format
-- Guaranteed detection of all duplicate attack activity
+## Core requirements
 
-## 6. Input Data
-The tool expects a JSON file containing a list of alert objects.
+- No source-specific configuration for ordinary supported text formats.
+- Multiple heterogeneous files can be combined in one run.
+- Every accepted alert is validated and appears in exactly one incident.
+- Identity conflicts and time boundaries constrain similarity matching.
+- Outputs explain the selected profile and match evidence.
+- Failures are concise and do not echo complete telemetry records.
+- Runtime is offline and does not execute field values.
+- The desktop interface remains useful on compact and wide displays.
 
-Each alert should contain fields such as:
+## Non-goals
 
-| Field | Description | Required in V1 |
-| --- | --- | --- |
-| 'alert_id' | Unique alert identifier | yes |
-| 'timestamp' | Alert timestamp | Yes |
-| 'source' | Alert source, such as Wazuh, Sysmon, or mock SIEM | Yes |
-| 'host' | Affected machine or endpoint | Yes |
-| 'user' | User account related to the alert | No |
-| 'event_type' | Type of event or detection, ex: process_creation, failed_login, malware_detection | Yes |
-| 'process_name' | Process involved in the alert | No |
-| `target_process_name` | Process targeted by the source process, when available | No |
-| 'file_hash' | File hash if available | No |
-| 'severity' | Alert severity level | Yes |
-| 'rule_name' | Detection rule name | No |
-| 'description' | Human-readable alert description | No |
+- Live SIEM transport or streaming ingestion.
+- Direct proprietary binary parsing for every vendor format.
+- Malware detonation, threat classification, campaign attribution, or automated containment.
+- Authentication, role-based access, shared storage, or case management.
+- A universal guarantee that every cluster represents one real-world incident.
 
-## 7. Output Data
-The tool outputs a list of incident summaries.
+## Success measures
 
-Each incident summary should contain:
-
-| Field | Description |
-|---|---|
-| `incident_id` | Generated incident identifier |
-| `alert_count` | Number of alerts grouped into the incident |
-| `grouping_fields` | Fields used to create the group |
-| `host` | Affected host |
-| `user` | Related user, if available |
-| `event_type` | Main event type |
-| `process_name` | Process involved, if available |
-| `target_process_name` | Target process, if the source event distinguishes one |
-| `file_hash` | File hash, if available |
-| `severity` | Highest severity in the group |
-| `first_seen` | First alert timestamp |
-| `last_seen` | Last alert timestamp |
-| `alert_ids` | IDs of grouped alerts |
-| `summary` | Short readable explanation |
-
-## 8. Duplicate Detection Logic - V1
-In version 1, alerts are considered duplicates when they share the same values for the configured grouping fields.
-
-Default grouping fields:
-
-- `host`
-- `user`
-- `event_type`
-- `process_name`
-- `target_process_name`
-- `file_hash`
-
-Before grouping, values are normalized by:
-
-- converting text to lowercase
-- trimming spaces
-- replacing missing optional fields with `unknown`
-
-Example:
-
-Two alerts are grouped together if they have:
-
-- same host
-- same user
-- same event type
-- same process name
-- same file hash
-
-This simple rule-based approach is explainable and easy to test.
-
-Ps: Version 1 does not yet apply a time-window constraint when grouping alerts.
-
-### SIEM/Data Source Decision for V1
-Version 1 will use mock JSON alerts inspired by Wazuh and Sysmon-style fields.
-
-This allows the project to focus first on deduplication logic, clean data design, testing, and documentation without depending on a full SIEM installation.
-
-A later version may include direct Wazuh integration or exported Wazuh alerts.
-
-## 9. Success Criteria
-Version 1 is successful if:
-
-- The tool can load a JSON file of alert
-- Duplicate alerts are grouped consistently
-- Different alerts are not incorrectly grouped
-- Missing optional fields do not crash the program
-- The grouped output is readable and useful for triage
-- The behavior can be adjusted through 'config.json'
-- Basic tests prove the main grouping logic works
-
-## 10. Assumptions
-- Input alerts are provided as JSON
-- Alerts have at least an ID, timestamp, source, host, event type, and severity
-- Some optional fields may be missing
-- The first version uses batch processing, not real-time monitoring
-- The grouping logic is rule-based and explainable
-- Demo data is sanitized and safe to publish
-
-## 11. Risks
-- False grouping: unrelated alerts may be grouped together if fields are too broad
-- Missed grouping: true duplicates may remain separate if fields differ slightly
-- Missing fields may reduce grouping accuracy
-- Poor configuration may produce misleading incident summaries
-- Real SIEM alerts may use inconsistent field names
-- Sensitive data must not be included in public demo files
-
-## 12. Future Improvements
-- Add automated ingestion pipelines for collecting alerts from SIEMs, endpoints, firewalls, or log aggregation systems and converting them into a normalized format compatible with the deduplicator.
-- Add near-duplicate scoring instead of only exact matching
-- Add time-window based grouping
-- Support Wazuh exported alerts
-- Support Sysmon event samples
-- Add CLI arguments
-- Add basic terminal table output
-- Add severity-based prioritization
-- Add confidence score for each incident group
+- Complete input/output alert-reference preservation.
+- Reviewed sample remains 40 alerts to 17 incidents.
+- Public 8,050-record raw-telemetry fixture processes without manual schema mapping.
+- Populated source-process and target-process identities never mix inside a cluster.
+- Numeric queue columns sort by typed values.
+- Static checks and the full automated suite pass.

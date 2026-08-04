@@ -1,53 +1,61 @@
-# Real raw-data test: Splunk Attack Data T1003.001
+# Real-data validation: Splunk Attack Data T1003.001
 
-## Outcome
+## Result
 
-The complete canonical bundle imported successfully: **8,050 raw telemetry
-records became 8,050 valid normalized alerts and 498 incident groups**. All
-8,050 alert IDs appear exactly once in the grouped output, so the transformation
-lost no references. The apparent queue reduction is 93.81%.
+The complete commit-pinned bundle contains 8,050 raw endpoint records. The V2 pipeline normalizes all 8,050 records and groups them into 450 incidents, a 94.41% queue reduction. Every normalized alert ID appears exactly once in the incident output.
 
-That percentage is a pipeline observation, not a claim of 93.81% detection
-quality. This public scenario has no ground-truth duplicate labels, and the
-current engine has no time-window constraint.
+| Measure | Result |
+|---|---:|
+| Raw records | 8,050 |
+| Valid normalized alerts | 8,050 |
+| SMART incidents | 450 |
+| Queue reduction | 94.41% |
+| Lost alert references | 0 |
+| Duplicate output references | 0 |
+| Clusters mixing populated source-process identities | 0 |
+| Clusters mixing populated target-process identities | 0 |
+| Processing time on the development machine | approximately 11 seconds from normalized JSON |
 
-## Why this dataset
+This is a pipeline validation result, not a duplicate-detection accuracy score. The dataset has no duplicate ground-truth labels, and controlled attack-emulation traffic is not representative of every production SOC.
 
-[Splunk Attack Data](https://github.com/splunk/attack_data) is an official,
-Apache-2.0-licensed repository of attack telemetry built for detection
-development and testing. The selected
-[T1003.001 Atomic Red Team scenario](https://github.com/splunk/attack_data/tree/671041b0405d5d766378a34a82bae59c5c672d9f/datasets/attack_techniques/T1003.001/atomic_red_team)
-records LSASS credential-dumping tests executed in Splunk Attack Range.
+## Dataset provenance
 
-This is real raw endpoint telemetry from controlled attack emulation. It is more
-representative than fabricated alert JSON, but it is not organic production SOC
-traffic. The five source files are exactly those declared by the upstream
-`atomic_red_team.yml` metadata.
+[Splunk Attack Data](https://github.com/splunk/attack_data) is an Apache-2.0-licensed collection published for detection development. The selected [T1003.001 Atomic Red Team scenario](https://github.com/splunk/attack_data/tree/671041b0405d5d766378a34a82bae59c5c672d9f/datasets/attack_techniques/T1003.001/atomic_red_team) records LSASS credential-dumping activity executed in Splunk Attack Range.
 
-| Source | Raw records | Shape |
+The repository pins upstream commit `671041b0405d5d766378a34a82bae59c5c672d9f`. Exact URLs, byte sizes, SHA-256 checksums, and per-file record counts are stored in [`manifest.json`](../data/external/splunk_attack_data/T1003.001/manifest.json). Upstream scenario metadata and license text are retained beside the manifest.
+
+| Telemetry family | Records | Shape |
 |---|---:|---|
-| Sysmon | 7,997 | Windows Event XML; some records span multiple lines |
+| Sysmon | 7,997 | Windows Event XML; some events span multiple lines |
 | CrowdStrike Falcon | 43 | JSON Lines |
-| Windows Security | 10 | Windows Event XML, Event ID 4688 |
-| **Total** | **8,050** | 14.4 MB of raw logs |
+| Windows Security | 10 | Windows Event XML, including Event ID 4688 |
+| **Total** | **8,050** | approximately 14.4 MB |
 
-Exact byte sizes, SHA-256 hashes, the pinned upstream commit, and per-file record
-counts are in
-[`data/external/splunk_attack_data/T1003.001/manifest.json`](../data/external/splunk_attack_data/T1003.001/manifest.json).
-The upstream metadata and Apache-2.0 license are preserved beside it.
+## Reproduce
 
-## Reproduce from the raw files
-
-Fetch and checksum the commit-pinned dataset:
+Download and checksum the pinned files:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\fetch_splunk_t1003_001.ps1
+powershell -NoProfile -ExecutionPolicy Bypass `
+  -File .\scripts\fetch_splunk_t1003_001.ps1
 ```
 
-Import all three telemetry shapes into the application's validated alert schema:
+Run SMART mode directly against all five raw files:
 
 ```powershell
-soc-alert-import-raw `
+soc-alert-deduplicator `
+  --input data/external/splunk_attack_data/T1003.001/raw/windows-sysmon_creddump.log `
+  --input data/external/splunk_attack_data/T1003.001/raw/procdump_windows-security.log `
+  --input data/external/splunk_attack_data/T1003.001/raw/crowdstrike_falcon.log `
+  --input data/external/splunk_attack_data/T1003.001/raw/createdump_windows-sysmon.log `
+  --input data/external/splunk_attack_data/T1003.001/raw/windows-sysmon.log `
+  --output data/external/splunk_attack_data/T1003.001/incidents.v2.json
+```
+
+The same sources can be normalized as a separate inspection step:
+
+```powershell
+soc-alert-normalize `
   --input data/external/splunk_attack_data/T1003.001/raw/windows-sysmon_creddump.log `
   --input data/external/splunk_attack_data/T1003.001/raw/procdump_windows-security.log `
   --input data/external/splunk_attack_data/T1003.001/raw/crowdstrike_falcon.log `
@@ -56,58 +64,32 @@ soc-alert-import-raw `
   --output data/external/splunk_attack_data/T1003.001/normalized_alerts.json
 ```
 
-Run the normal deduplication pipeline:
+Then run the normalized batch:
 
 ```powershell
 soc-alert-deduplicator `
   --input data/external/splunk_attack_data/T1003.001/normalized_alerts.json `
-  --config config.real-data.json `
-  --output data/external/splunk_attack_data/T1003.001/incidents.json
+  --output data/external/splunk_attack_data/T1003.001/incidents.v2.json
 ```
 
-To inspect it visually, launch `soc-alert-deduplicator-gui`, select those same
-normalized input, configuration, and incident-output paths, then choose **Analyze
-alerts**.
+## Safety regression discovered at scale
 
-## Observed result
+An early similarity implementation allowed sparse records to bridge clusters with different process names. The initial 8,050-record run exposed a 5,658-alert cluster containing 27 source-process values and 66 target-process values. That result was rejected.
 
-| Measure | Value |
-|---|---:|
-| Raw records | 8,050 |
-| Valid normalized alerts | 8,050 |
-| Exact-key incident groups | 498 |
-| Apparent queue reduction | 93.81% |
-| Unique input IDs | 8,050 |
-| Grouped ID references | 8,050 |
-| Lost or duplicate references | 0 |
-| Largest group | 3,545 alerts |
-| Hosts/agent identities | 6 |
+The corrected engine now:
 
-Source distribution: 7,997 Sysmon records, 43 CrowdStrike records, and 10
-Windows Security records. The most common event is Sysmon Event ID 10 process
-access (6,941 records), followed by process creation (426) and file creation
-(382).
+- uses populated process and target-process identities in candidate block keys;
+- stores cluster identity anchors independently from the first raw record;
+- rejects populated process or target disagreement;
+- removes expired cluster references from ordered index buckets; and
+- retains continuity and maximum-span boundaries.
 
-The real-data pass caused one useful schema improvement: `target_process_name`
-is now preserved separately from the source process and can participate in
-grouping. Without it, one process-access group incorrectly combined activity
-against different target processes and reached 4,179 alerts. With target context,
-the output has 498 groups rather than 206. The remaining 3,545-alert largest
-group is repeated `svchost.exe` access to `sysmon64.exe`, which shows why a future
-time-window feature is still necessary.
+The final output contains no incident with multiple populated source-process or target-process identities. This is a structural safety property, not evidence that every remaining cluster is semantically correct.
 
-## Interpretation limits
+## Interpretation
 
-- Imported `severity` is a documented priority heuristic because raw Sysmon and
-  Windows Security events are telemetry, not vendor alerts with normalized
-  severity labels. Process access to `lsass.exe` is marked critical; other
-  mappings remain visible in `raw_import.py`.
-- The bundle combines captures dated 2020, 2022, and 2023. It represents one
-  ATT&CK technique scenario, not one continuous production queue.
-- CrowdStrike records in this sample omit a hostname, so the stable Falcon agent
-  ID (`aid`) is used as the endpoint identity.
-- Exact grouping still risks over-grouping repeated legitimate activity and
-  under-grouping related activity with changing fields. Analysts must inspect
-  the source references before acting.
-- Logged command lines and URLs are untrusted text. The importer parses them; it
-  never executes them.
+The largest final cluster contains 3,565 repeated Sysmon process-access records with the same host, event, source process, and target process inside the permitted continuity span. High-volume exact repetition is expected in this capture and demonstrates why alert-count sorting must be numeric in the desktop queue.
+
+Severity values for raw Sysmon and Windows Security events are documented prioritization heuristics; those event formats do not provide a universal vendor alert severity. Process access to `lsass.exe` is prioritized as critical, while other mappings remain visible in `raw_import.py`.
+
+The five files include captures from different years and endpoint identities. They represent one ATT&CK technique scenario, not one continuous production queue. Analysts must follow source IDs back to raw evidence before making a response decision.

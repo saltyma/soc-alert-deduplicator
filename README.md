@@ -1,58 +1,31 @@
 # SOC Alert Deduplicator
 
-An explainable, offline-first Python tool that turns repetitive JSON security alerts into deterministic incident summaries. It includes both a production-style CLI and a modern dark desktop dashboard for analyst workflows.
+SOC Alert Deduplicator is an offline desktop and command-line application for turning heterogeneous security telemetry into an explainable incident queue. Version 2 detects common input formats and field layouts automatically, infers a matching profile from each batch, and groups repeated activity without requiring a source-specific configuration file.
 
-![Dark SOC Alert Deduplicator dashboard](docs/demo/gui-dashboard.png)
+![Incident Clarity Console](docs/demo/gui-dashboard-v2.png)
 
-## Verified demo result
+## Highlights
 
-| Measure | Before | After |
-|---|---:|---:|
-| Queue items | 40 alerts | 17 incidents |
-| Noise reduction | — | **57.5%** |
-| Lost alert references | — | **0** |
-| Highest severity | — | Critical |
+- Automatic ingestion for JSON, JSON Lines/NDJSON, CSV, TSV, XML, Windows Event XML, CEF, LEEF, RFC 5424/BSD syslog, key-value logs, and plain text.
+- Transparent schema mapping for nested and flat records, with source-format and source-record provenance on every normalized alert.
+- Adaptive field selection, evidence weights, threshold, candidate blocking, and time-window inference.
+- Conservative identity boundaries for hosts, file hashes, source processes, and target processes to prevent similarity chains from merging different activity.
+- Explainable incident metadata: match type, confidence, evidence fields, inferred profile ID, time range, and every source alert ID.
+- Responsive dark desktop interface with multi-file drag and drop, numeric sorting, search, severity filtering, JSON output, and CSV export.
+- Local processing only. Telemetry is not sent to a service.
 
-The benchmark is automated: every one of the 40 synthetic alert IDs appears exactly once, and generated JSON must match the reviewed oracle byte for byte.
+## Verified results
 
-## The problem
+| Dataset | Alerts | Incidents | Queue reduction | Lost or duplicate alert references |
+|---|---:|---:|---:|---:|
+| Reviewed sample | 40 | 17 | 57.5% | 0 |
+| Splunk Attack Data T1003.001 | 8,050 | 450 | 94.41% | 0 |
 
-SOC analysts often review many alerts that describe the same underlying activity. Repeated detections for one host, user, process, or file hash increase triage time and make the queue harder to prioritize.
+The public T1003.001 run completes in approximately 11 seconds on the development machine. That measurement is a reproducibility result, not a claim about universal detection quality. The source is controlled attack-emulation telemetry and has no duplicate ground-truth labels. See [Real-data validation](docs/real_data_test.md).
 
-This project collapses those repetitions into incident-oriented summaries while preserving the source alert IDs, severity, time range, and grouping evidence. The result is smaller and easier to investigate without pretending that simple matching is a complete correlation engine.
+## Install
 
-## Who it is for
-
-- **SOC analysts** who need a clearer batch triage queue.
-- **SOC administrators and detection engineers** who need explainable, configurable grouping rules.
-- **Security engineering reviewers** evaluating deterministic data pipelines, validation, testing, and risk awareness.
-
-## What it does
-
-- Validates UTF-8 JSON alerts, required fields, timestamps, severities, hashes, and unique IDs.
-- Normalizes configured grouping values without mutating source records.
-- Groups exact normalized tuples in deterministic first-seen order.
-- Aggregates alert counts, severity, timestamps, context, and source IDs.
-- Writes JSON atomically and exports analyst-friendly CSV from the GUI.
-- Handles omitted, null, blank, case-varied, and space-padded optional values.
-- Rejects malformed inputs and unsafe output collisions with concise errors.
-- Imports raw Sysmon XML, Windows Security XML, and CrowdStrike JSON Lines.
-- Runs entirely on the local machine; no alert data is sent over a network.
-
-```mermaid
-flowchart LR
-    Input["JSON alerts"] --> Validate["Validate"]
-    Config["config.json"] --> Normalize["Normalize configured fields"]
-    Validate --> Normalize --> Group["Exact-key grouping"]
-    Group --> Summarize["Incident summaries"]
-    Summarize --> JSON["JSON output"]
-    Summarize --> Dashboard["Dark desktop dashboard"]
-    Dashboard --> CSV["CSV export"]
-```
-
-## Quick start
-
-Requirements: Python 3.11+ and Windows, macOS, or Linux with a desktop environment.
+Requirements: Python 3.11 or newer. The desktop interface runs on Windows, macOS, and Linux environments supported by PySide6.
 
 ```powershell
 git clone <repository-url>
@@ -63,195 +36,167 @@ python -m pip install --upgrade pip
 pip install -e .
 ```
 
-### Launch the desktop dashboard
+## Desktop application
 
 ```powershell
 soc-alert-deduplicator-gui
 ```
 
-Select the alert input, configuration, and JSON output paths, then choose **Analyze alerts**. You can search the incident queue, filter by severity, inspect source alert IDs, copy a summary, open the JSON, or export CSV.
+Select one or more telemetry files, choose an output path, and run the analysis. SMART mode is the default and requires no configuration. The **Controls** button collapses the input panel when more queue space is needed.
 
-To open the verified demo immediately:
+Open the bundled sample immediately:
 
 ```powershell
 soc-alert-deduplicator-gui --demo
 ```
 
-### Run the CLI
+## Command line
+
+Run the adaptive pipeline on one file:
 
 ```powershell
 soc-alert-deduplicator `
-  --input data/demo_before.json `
+  --input data/demo/raw_alerts.json `
+  --output output.v2.json
+```
+
+Combine different formats in one batch by repeating `--input`:
+
+```powershell
+soc-alert-deduplicator `
+  --input alerts.ndjson `
+  --input gateway.cef `
+  --input endpoint-events.csv `
+  --output incidents.json
+```
+
+Each SMART run also writes an adjacent profile document, such as `incidents.profile.json`. It records detected formats, mapped fields, warnings, inferred weights, threshold, continuity window, input count, incident count, and reduction percentage.
+
+Normalize without grouping:
+
+```powershell
+soc-alert-normalize `
+  --input firewall.log `
+  --input endpoint-events.xml `
+  --output normalized-alerts.json
+```
+
+The original exact-match engine remains available for deterministic policy-based workflows:
+
+```powershell
+soc-alert-deduplicator `
+  --mode exact `
+  --input data/demo/raw_alerts.json `
   --config config.json `
-  --output output.json
+  --output exact-incidents.json
 ```
 
-Expected terminal output:
+## Input behavior
 
-```text
-Processed 40 alerts into 17 incidents.
-Output written to output.json.
-```
+The importer recognizes:
 
-Running without installation is also supported:
+| Family | Accepted forms |
+|---|---|
+| JSON | arrays, single objects, common `events`/`alerts`/`records` wrappers, Elastic-style `hits.hits`, JSON Lines, NDJSON |
+| Delimited | comma, semicolon, tab, or pipe-delimited records with headers |
+| XML | generic event collections and exported Windows Event XML streams |
+| Security text | CEF, LEEF 1/2, RFC 5424 syslog, BSD syslog, key-value lines, plain text |
+| Compression | `.gz` files and `.zip` archives with expansion and member-count limits |
 
-```powershell
-$env:PYTHONPATH = "src"
-python -m soc_alert_deduplicator --input data/demo_before.json --config config.json --output output.json
-python -m soc_alert_deduplicator.gui --demo
-```
+Direct binary `.evtx`, packet captures, office documents, and proprietary binary formats are rejected instead of being guessed. Export Windows events as XML before ingestion. Missing or unrecognized timestamps use source file metadata and produce a warning in the profile document.
 
-## Input and output
-
-Minimal input alert:
+All normalized records contain the required alert contract:
 
 ```json
 {
-  "alert_id": "ALERT-0001",
-  "timestamp": "2026-06-01T08:15:00Z",
-  "source": "mock-wazuh",
-  "host": "WS-001",
-  "user": "salma.lab",
-  "event_type": "malware_detection",
-  "process_name": "invoice_viewer.exe",
-  "file_hash": "a7f3c9d1e8b2456a9c01d02f5d33b71c4e8a6b9d2f1073c5e6a8b1d4f9c2e7a0",
-  "severity": "high"
-}
-```
-
-Condensed incident output:
-
-```json
-{
-  "incident_id": "INC-001",
-  "alert_count": 8,
-  "host": "ws-001",
-  "user": "salma.lab",
-  "event_type": "malware_detection",
+  "alert_id": "AUTO-1A2B3C4D5E6F",
+  "timestamp": "2026-07-01T12:00:00Z",
+  "source": "endpoint-sensor",
+  "host": "ws-01",
+  "event_type": "process_access",
   "severity": "high",
-  "first_seen": "2026-06-01T08:15:00Z",
-  "last_seen": "2026-06-01T08:29:00Z",
-  "alert_ids": ["ALERT-0001", "ALERT-0002"],
-  "summary": "8 malware_detection alerts grouped for host ws-001 and user salma.lab."
+  "process_name": "rundll32.exe",
+  "target_process_name": "lsass.exe",
+  "command_line": "rundll32.exe example.dll,Entry",
+  "detected_format": "cef",
+  "source_record": "gateway.cef:18"
 }
 ```
 
-The complete contract is documented in [the concept document](docs/concept.md).
+Aliases cover common vendor and ECS-like names. Nested objects are flattened for matching while the normalized output remains predictable.
 
-## Configuration
+## How SMART matching works
 
-Grouping behavior is controlled without changing Python code:
+```mermaid
+flowchart LR
+    Files["Raw telemetry files"] --> Detect["Detect format and decode safely"]
+    Detect --> Map["Map to normalized alert fields"]
+    Map --> Profile["Infer coverage, weights, threshold, and window"]
+    Profile --> Block["Build identity-aware candidate blocks"]
+    Block --> Score["Score available evidence"]
+    Score --> Guard["Apply identity and time boundaries"]
+    Guard --> Incidents["Write incidents and profile evidence"]
+```
+
+The engine normalizes paths, case, whitespace, volatile command-line numbers, GUIDs, and long hexadecimal tokens. It then scores only candidates from recent identity-aware blocks. A match must have enough evidence and exceed the inferred threshold. Host, file-hash, process, target-process, event, and time checks prevent cluster drift.
+
+SMART matching is deliberately explainable rather than probabilistic. It does not call an external model, execute log content, or label activity as malicious or benign.
+
+## Optional SMART tuning
+
+Most datasets should run with no tuning file. For controlled environments, a small JSON document can override the inferred choices:
 
 ```json
 {
-  "group_by": ["host", "user", "event_type", "process_name", "file_hash"],
-  "case_sensitive": false,
-  "missing_value": "unknown",
-  "minimum_match_score": 1.0
+  "threshold": 0.88,
+  "time_window_minutes": 20,
+  "min_evidence_fields": 3,
+  "exclude_fields": ["description"],
+  "field_weights": {
+    "file_hash": 7.0,
+    "host": 4.0
+  },
+  "max_candidates": 150
 }
 ```
 
-Version 1 deliberately supports exact matching only. See [Configuration](docs/configuration.md) for supported fields, validation rules, and safe tuning guidance.
+Pass it with `--config smart-tuning.json`. No field mapping is required. See [Configuration](docs/configuration.md) for validation rules and trade-offs.
 
-## Demo and proof
+## Safety model
 
-- [`data/demo_before.json`](data/demo_before.json): 40 synthetic Wazuh/Sysmon-inspired alerts.
-- [`data/demo_after.json`](data/demo_after.json): 17 reviewed incident summaries.
-- [Demo walkthrough](docs/demo.md): reproducible GUI and CLI steps.
-- [Dataset design](docs/dataset_design.md): scenarios, edge cases, and oracle rationale.
-- [Data research](docs/data_research.md): source-field research and public-safety decisions.
+- Input is read as data and never executed.
+- Duplicate JSON keys, malformed records, unsafe encodings, oversized expanded archives, encrypted ZIP members, and invalid normalized alerts are rejected.
+- Input and tuning files cannot be overwritten as output.
+- JSON and CSV writes use temporary files and atomic replacement.
+- CSV export neutralizes common spreadsheet-formula prefixes.
+- Every accepted alert ID appears in exactly one output incident.
 
-## Test with real raw telemetry
-
-The repository includes a reproducible adapter and provenance manifest for the
-Apache-2.0-licensed Splunk Attack Data T1003.001 credential-dumping scenario.
-It converts raw Sysmon XML, Windows Security XML, and CrowdStrike JSON Lines into
-the validated alert contract before running the unchanged grouping pipeline.
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\fetch_splunk_t1003_001.ps1
-soc-alert-import-raw --help
-```
-
-The verified complete run processed 8,050 raw records into 498 groups with all
-8,050 source IDs preserved. Read [the real-data test report](docs/real_data_test.md)
-for the exact commands, checksums, results, and interpretation limits.
+Deduplication is a triage aid, not a security verdict. Sparse telemetry can still produce false merges or false splits, and public attack-emulation data does not represent every operational environment. Review [Threat model and limitations](docs/threat_model.md) before using the output operationally.
 
 ## Testing
 
-Install development tools and run the complete gate:
-
 ```powershell
 pip install -r requirements-dev.txt
-pytest
-coverage run -m pytest
-coverage report
 ruff check .
 ruff format --check .
 mypy src
+pytest
+coverage run -m pytest
+coverage report
 ```
 
-The suite covers configuration, validation, normalization, grouping, aggregation, atomic JSON/CSV output, CLI behavior, the benchmark oracle, and desktop interactions. The processing engine enforces 100% statement and branch coverage; GUI layout code is validated with focused Qt smoke and interaction tests.
-
-## Security model and limitations
-
-The application treats alert and configuration files as untrusted input, never executes field values, avoids printing raw records in errors, protects input files from output overwrite, and writes results atomically.
-
-Important limitations:
-
-- Exact rule-based grouping can over-group unrelated alerts or under-group related activity.
-- Missing context can push several sparse alerts into the same `unknown` bucket.
-- There is no time-window constraint, fuzzy scoring, campaign correlation, or machine learning.
-- The application processes local batches; it is not a live SIEM connector or response platform.
-- A malicious actor who controls grouping fields may shape alerts to evade or influence clustering.
-
-Read the full [Threat Model and Limitations](docs/threat_model.md) before applying the tool to operational data. Analysts must treat grouped incidents as triage aids, not as proof that activity is benign or identical.
-
-## Repository structure
-
-```text
-soc-alert-deduplicator/
-├── config.json
-├── data/
-│   ├── demo_before.json
-│   ├── demo_after.json
-│   └── demo/
-├── docs/
-│   ├── demo/
-│   ├── architecture.md
-│   ├── configuration.md
-│   ├── demo.md
-│   └── threat_model.md
-├── src/soc_alert_deduplicator/
-│   ├── assets/
-│   ├── gui.py
-│   └── processing modules
-├── tests/
-├── pyproject.toml
-├── requirements.txt
-└── requirements-dev.txt
-```
-
-## Roadmap
-
-- Configurable time-window grouping.
-- Field mapping for native Wazuh alert/archive JSON.
-- Near-duplicate scoring with transparent evidence.
-- Signed desktop builds and release automation.
-- Performance benchmarks for large alert batches.
-- Optional live SIEM ingestion, kept separate from the deterministic core.
+The 252-test suite covers ingestion formats, nested mappings, compression, configuration validation, adaptive profiling, process-identity drift prevention, time boundaries, deterministic exact mode, JSON/CSV safety, package metadata, CLI behavior, and desktop interactions. Branch-aware engine coverage is enforced at 95%.
 
 ## Documentation
 
 - [Architecture](docs/architecture.md)
-- [Desktop interface](docs/desktop_ui.md)
 - [Configuration](docs/configuration.md)
-- [Demo walkthrough](docs/demo.md)
-- [Real raw-data test](docs/real_data_test.md)
-- [Threat model](docs/threat_model.md)
-- [Use cases](docs/use_cases.md)
-- [Phase completion record](docs/phase_completion.md)
+- [Desktop interface](docs/desktop_ui.md)
+- [Demo and verification](docs/demo.md)
+- [Real-data validation](docs/real_data_test.md)
+- [Threat model and limitations](docs/threat_model.md)
+- [Release verification](docs/release_verification.md)
 
-## License
+## License and data provenance
 
-Released under the [MIT License](LICENSE).
+Application code is released under the [MIT License](LICENSE). The optional Splunk Attack Data fixture retains its upstream Apache-2.0 license, commit pin, metadata, and checksums under `data/external/splunk_attack_data/T1003.001/`.
