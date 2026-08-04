@@ -1,0 +1,13 @@
+[run]
+branch = True
+source = src/soc_alert_deduplicator
+omit =
+    src/soc_alert_deduplicator/__main__.py
+
+[report]
+fail_under = 95
+show_missing = True
+skip_covered = False
+exclude_lines =
+    pragma: no cover
+    if __name__ == .__main__.:

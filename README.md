@@ -11,7 +11,7 @@ This tool aims to reduce alert noise by grouping duplicate or highly similar ale
 - SOC admins or detection engineers who need configurable grouping rules
 
 ## Status
-Phase 4 core implementation is complete locally: the command-line MVP loads and validates alerts, normalizes grouping fields, creates deterministic exact-match incidents, aggregates severity and timestamps, and writes JSON output. The broader automated test suite is planned for Phase 5.
+Phase 5 testing is complete locally. The command-line MVP is protected by unit, failure-path, integration, CLI, and benchmark-oracle tests, with branch coverage enforced at 95% or higher.
 
 ## Implemented in version 1
 
@@ -38,6 +38,18 @@ Expected result:
 Processed 40 alerts into 17 incidents.
 Output written to output.json.
 ```
+
+## Testing
+
+Run the complete test suite from PowerShell in the project root:
+
+```powershell
+pytest
+coverage run -m pytest
+coverage report
+```
+
+The coverage configuration enables branch measurement and fails the report below 95%. The end-to-end benchmark test also requires the generated JSON to match `data/demo/expected_incidents.json` byte for byte.
 
 ## Design
 
