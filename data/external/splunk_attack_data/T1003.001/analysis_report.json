@@ -1,0 +1,29 @@
+{
+  "generated_on": "2026-08-04",
+  "dataset_commit": "671041b0405d5d766378a34a82bae59c5c672d9f",
+  "raw_records": 8050,
+  "normalized_alerts": 8050,
+  "incidents": 498,
+  "queue_reduction_percent": 93.81,
+  "unique_input_alert_ids": 8050,
+  "grouped_alert_references": 8050,
+  "unique_grouped_alert_references": 8050,
+  "lost_alert_references": 0,
+  "largest_incident_alert_count": 3545,
+  "time_range": {
+    "first_seen": "2020-11-03T15:50:18.511369100Z",
+    "last_seen": "2023-01-21T13:02:33.687750100Z"
+  },
+  "source_counts": {
+    "splunk-attack-data/sysmon": 7997,
+    "splunk-attack-data/crowdstrike-falcon": 43,
+    "splunk-attack-data/windows-security": 10
+  },
+  "severity_counts": {
+    "critical": 210,
+    "high": 6787,
+    "low": 1048,
+    "informational": 5
+  },
+  "interpretation": "Pipeline-integrity result only. The source dataset has no duplicate-group ground truth, and imported severities are transparent analytical heuristics rather than vendor detection labels."
+}

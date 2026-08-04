@@ -108,7 +108,7 @@ The input is a UTF-8 JSON array. Every alert must contain:
 - `event_type`
 - `severity`
 
-Optional context includes `user`, `process_name`, `parent_process_name`, `command_line`, `file_hash`, `rule_name`, and `description`.
+Optional context includes `user`, `process_name`, `target_process_name`, `parent_process_name`, `command_line`, `file_hash`, `rule_name`, and `description`.
 
 Additional invariants:
 

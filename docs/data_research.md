@@ -53,6 +53,7 @@ Sysmon records endpoint telemetry; it does not itself decide that activity is ma
 For this project, Sysmon is therefore a field-model reference rather than the alert generator. The v1 schema retains:
 
 - `process_name`
+- `target_process_name`
 - `parent_process_name`
 - `command_line`
 - `file_hash`
@@ -87,6 +88,7 @@ No `NaN`, infinity, binary payload, or raw log blob is included. This keeps the 
 | `user` | string or null | No | Decoded event/Sysmon | Account associated with activity |
 | `event_type` | string | Yes | Normalized category | Broad behavior category |
 | `process_name` | string or null | No | Sysmon | Executable name |
+| `target_process_name` | string or null | No | Sysmon | Target executable for process-access and remote-thread events |
 | `parent_process_name` | string or null | No | Sysmon | Parent executable context |
 | `command_line` | string or null | No | Sysmon | Process execution context |
 | `file_hash` | string or null | No | Sysmon | SHA-256 when available |

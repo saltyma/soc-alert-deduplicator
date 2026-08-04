@@ -26,6 +26,7 @@ OPTIONAL_TEXT_FIELDS = frozenset(
     {
         "user",
         "process_name",
+        "target_process_name",
         "parent_process_name",
         "command_line",
         "file_hash",

@@ -214,3 +214,8 @@ data/processed/*.json
 /incidents.csv
 /docs/demo/gui_demo_output.json
 pysidedeploy.spec
+
+# Reproducible third-party telemetry and generated real-data results.
+/data/external/splunk_attack_data/T1003.001/raw/*.log
+/data/external/splunk_attack_data/T1003.001/normalized_alerts.json
+/data/external/splunk_attack_data/T1003.001/incidents.json

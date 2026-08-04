@@ -1,0 +1,6 @@
+{
+  "group_by": ["source", "host", "user", "event_type", "process_name", "target_process_name", "file_hash"],
+  "case_sensitive": false,
+  "missing_value": "unknown",
+  "minimum_match_score": 1.0
+}

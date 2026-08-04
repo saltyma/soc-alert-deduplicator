@@ -15,3 +15,7 @@ class AlertInputError(DeduplicatorError):
 
 class IncidentOutputError(DeduplicatorError):
     """Raised when incident output cannot be written safely."""
+
+
+class RawImportError(DeduplicatorError):
+    """Raised when a supported raw telemetry record cannot be imported."""

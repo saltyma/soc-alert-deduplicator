@@ -140,6 +140,7 @@ def test_load_alerts_rejects_unsupported_severity(
     [
         "user",
         "process_name",
+        "target_process_name",
         "parent_process_name",
         "command_line",
         "rule_name",

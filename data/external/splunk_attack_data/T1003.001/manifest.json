@@ -1,0 +1,61 @@
+{
+  "dataset": "Splunk Attack Data - T1003.001 Atomic Red Team",
+  "scenario_id": "cc9b25d6-efc9-11eb-926b-550bf0943fbb",
+  "mitre_technique": "T1003.001",
+  "environment": "attack_range",
+  "upstream_repository": "https://github.com/splunk/attack_data",
+  "upstream_scenario": "https://github.com/splunk/attack_data/tree/671041b0405d5d766378a34a82bae59c5c672d9f/datasets/attack_techniques/T1003.001/atomic_red_team",
+  "upstream_commit": "671041b0405d5d766378a34a82bae59c5c672d9f",
+  "license": "Apache-2.0",
+  "retrieved_on": "2026-08-04",
+  "raw_records": 8050,
+  "files": [
+    {
+      "path": "raw/windows-sysmon.log",
+      "bytes": 14235927,
+      "records": 7960,
+      "format": "Windows Event XML stream",
+      "sha256": "a1905850598f1e943708c3329190e29c6cb046389c1575cb2afd6369b5f269f1"
+    },
+    {
+      "path": "raw/windows-sysmon_creddump.log",
+      "bytes": 65428,
+      "records": 32,
+      "format": "Windows Event XML stream",
+      "sha256": "a37b69dce32eaff6b5c1fdb4bb9cbea6dec78a4fbd22cd41362ab0e377f075ef"
+    },
+    {
+      "path": "raw/procdump_windows-security.log",
+      "bytes": 14595,
+      "records": 10,
+      "format": "Windows Event XML stream",
+      "sha256": "86be8a91228678b0639f5cc192722b40acb81f06eb998bbc34916cf08f436abd"
+    },
+    {
+      "path": "raw/crowdstrike_falcon.log",
+      "bytes": 77504,
+      "records": 43,
+      "format": "CrowdStrike JSON Lines",
+      "sha256": "9eb639b8642f067f76ddb8b4ab66494deb9893eed528bcb02063802c2dbff140"
+    },
+    {
+      "path": "raw/createdump_windows-sysmon.log",
+      "bytes": 10636,
+      "records": 5,
+      "format": "Windows Event XML stream",
+      "sha256": "b898327b2b446ba63c13934d50c899eb4b2ee2c722a7c6c4a1dae6c515720001"
+    },
+    {
+      "path": "atomic_red_team.yml",
+      "bytes": 1709,
+      "format": "upstream scenario metadata",
+      "sha256": "fcb48abd1ac0cc2576092167cf1ec122fa120e3a2abfd29150801c9e3e4123d6"
+    },
+    {
+      "path": "UPSTREAM_LICENSE",
+      "bytes": 11344,
+      "format": "Apache License 2.0 text",
+      "sha256": "8505946b2464fa90223996d99eecbc7639a86648ca071f0cac21695be2623a0a"
+    }
+  ]
+}

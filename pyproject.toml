@@ -24,6 +24,7 @@ dependencies = ["PySide6>=6.8,<7"]
 [project.scripts]
 soc-alert-deduplicator = "soc_alert_deduplicator.main:main"
 soc-alert-deduplicator-gui = "soc_alert_deduplicator.gui:main"
+soc-alert-import-raw = "soc_alert_deduplicator.raw_import:main"
 
 [tool.setuptools]
 package-dir = { "" = "src" }

@@ -14,3 +14,6 @@ All notable changes to this project are documented here.
 - Verified 40-alert to 17-incident demo and rendered dashboard proof.
 - Comprehensive threat model, configuration guide, demo guide, and release metadata.
 - Full engine branch coverage and focused desktop interaction tests.
+- Commit-pinned Splunk Attack Data T1003.001 raw-telemetry fixture with checksums.
+- Streaming Sysmon/Windows Event XML and CrowdStrike JSON Lines importer.
+- Explicit target-process evidence and a verified 8,050-record integration run.

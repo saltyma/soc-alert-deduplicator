@@ -54,6 +54,7 @@ Each alert should contain fields such as:
 | 'user' | User account related to the alert | No |
 | 'event_type' | Type of event or detection, ex: process_creation, failed_login, malware_detection | Yes |
 | 'process_name' | Process involved in the alert | No |
+| `target_process_name` | Process targeted by the source process, when available | No |
 | 'file_hash' | File hash if available | No |
 | 'severity' | Alert severity level | Yes |
 | 'rule_name' | Detection rule name | No |
@@ -73,6 +74,7 @@ Each incident summary should contain:
 | `user` | Related user, if available |
 | `event_type` | Main event type |
 | `process_name` | Process involved, if available |
+| `target_process_name` | Target process, if the source event distinguishes one |
 | `file_hash` | File hash, if available |
 | `severity` | Highest severity in the group |
 | `first_seen` | First alert timestamp |
@@ -89,6 +91,7 @@ Default grouping fields:
 - `user`
 - `event_type`
 - `process_name`
+- `target_process_name`
 - `file_hash`
 
 Before grouping, values are normalized by:

@@ -35,6 +35,7 @@
 - `user`
 - `event_type`
 - `process_name`
+- `target_process_name`
 - `parent_process_name`
 - `command_line`
 - `file_hash`
@@ -78,6 +79,7 @@ This produces fewer incidents but increases the chance of grouping unrelated pro
     "host",
     "user",
     "process_name",
+    "target_process_name",
     "parent_process_name",
     "command_line",
     "file_hash"

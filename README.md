@@ -36,6 +36,7 @@ This project collapses those repetitions into incident-oriented summaries while 
 - Writes JSON atomically and exports analyst-friendly CSV from the GUI.
 - Handles omitted, null, blank, case-varied, and space-padded optional values.
 - Rejects malformed inputs and unsafe output collisions with concise errors.
+- Imports raw Sysmon XML, Windows Security XML, and CrowdStrike JSON Lines.
 - Runs entirely on the local machine; no alert data is sent over a network.
 
 ```mermaid
@@ -160,6 +161,22 @@ Version 1 deliberately supports exact matching only. See [Configuration](docs/co
 - [Dataset design](docs/dataset_design.md): scenarios, edge cases, and oracle rationale.
 - [Data research](docs/data_research.md): source-field research and public-safety decisions.
 
+## Test with real raw telemetry
+
+The repository includes a reproducible adapter and provenance manifest for the
+Apache-2.0-licensed Splunk Attack Data T1003.001 credential-dumping scenario.
+It converts raw Sysmon XML, Windows Security XML, and CrowdStrike JSON Lines into
+the validated alert contract before running the unchanged grouping pipeline.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\fetch_splunk_t1003_001.ps1
+soc-alert-import-raw --help
+```
+
+The verified complete run processed 8,050 raw records into 498 groups with all
+8,050 source IDs preserved. Read [the real-data test report](docs/real_data_test.md)
+for the exact commands, checksums, results, and interpretation limits.
+
 ## Testing
 
 Install development tools and run the complete gate:
@@ -218,7 +235,7 @@ soc-alert-deduplicator/
 ## Roadmap
 
 - Configurable time-window grouping.
-- Field mapping for native Wazuh and Sysmon exports.
+- Field mapping for native Wazuh alert/archive JSON.
 - Near-duplicate scoring with transparent evidence.
 - Signed desktop builds and release automation.
 - Performance benchmarks for large alert batches.
@@ -230,6 +247,7 @@ soc-alert-deduplicator/
 - [Desktop interface](docs/desktop_ui.md)
 - [Configuration](docs/configuration.md)
 - [Demo walkthrough](docs/demo.md)
+- [Real raw-data test](docs/real_data_test.md)
 - [Threat model](docs/threat_model.md)
 - [Use cases](docs/use_cases.md)
 - [Phase completion record](docs/phase_completion.md)
