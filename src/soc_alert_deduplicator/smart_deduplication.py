@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 from difflib import SequenceMatcher
 from pathlib import PureWindowsPath
 from .io import Alert, Incident, parse_timestamp
+from .insights import analyst_view
 from .smart_profile import SmartProfile
 from .summaries import SEVERITY_RANK
 
@@ -456,5 +457,6 @@ def build_smart_incidents(
                 }
             ),
         }
+        incident["analyst_view"] = analyst_view(incident)
         incidents.append(incident)
     return incidents

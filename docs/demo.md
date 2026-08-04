@@ -32,13 +32,18 @@ The desktop run demonstrates:
 - automatic format and schema detection;
 - inferred evidence fields and profile metadata;
 - alert, incident, reduction, and severity metrics;
+- live severity, top-host, and alert-activity visualizations;
 - numeric alert-count and confidence sorting;
 - search and severity filtering;
-- source/target process context and source IDs;
+- understandable incident titles, grouping reasons, and risk context;
+- a four-tab investigation view with relationship and grouping diagrams;
+- inspectable normalized source records with retained provenance;
 - JSON output and safe CSV export; and
 - collapsible, scrollable controls with responsive queue layout.
 
 ![Adaptive desktop dashboard](demo/gui-dashboard-v2.png)
+
+![Incident investigation workspace](demo/incident-investigation-v2.png)
 
 ## Exact compatibility oracle
 

@@ -1,5 +1,29 @@
 # Changelog
 
+## 2.1.0 — 2026-08-04
+
+### Added
+
+- Live severity, host-volume, and alert-activity visualizations that follow the current queue filters.
+- A resizable incident investigation window with Overview, Timeline, Why grouped, and Source alerts tabs.
+- Process-to-target and alert-grouping diagrams built with native Qt rendering.
+- Plain-language analyst narratives, cautious risk context, recommended checks, and explicit grouping explanations in every SMART JSON incident.
+- Accessible names, descriptions, direct value labels, and tooltips for visual summaries.
+
+### Changed
+
+- Incident rows now display readable event names and expose a complete narrative tooltip.
+- The main incident preview prioritizes what happened and why the records belong together; source records move into progressive disclosure.
+- Search and severity filters now update the table, chart totals, host ranking, timeline, and visible-item summary together.
+- The sample-data action and `--demo` option now always load the documented 40-alert sample.
+
+### Verified
+
+- 262 automated tests, 96% branch-aware engine coverage, Ruff formatting/lint, and mypy checks.
+- Native chart and diagram rendering in Qt offscreen mode, dialog navigation, source-record inspection, and clipboard behavior.
+- Reviewed sample: 40 alerts to 17 incidents with complete reference preservation.
+- Splunk Attack Data T1003.001: 8,050 alerts to 450 incidents with complete reference preservation.
+
 ## 2.0.0 — 2026-08-04
 
 ### Added

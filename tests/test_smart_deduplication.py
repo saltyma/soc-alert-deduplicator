@@ -112,4 +112,7 @@ def test_incident_exposes_explainable_match_metadata(make_alert: Any) -> None:
     assert incident["deduplication"]["profile_id"] == profile.profile_id
     assert incident["deduplication"]["confidence"] > 0.9
     assert "host" in incident["deduplication"]["evidence_fields"]
+    assert incident["analyst_view"]["title"]
+    assert "what_happened" in incident["analyst_view"]
+    assert "not the probability" in incident["analyst_view"]["why_grouped"]
     assert incident["alert_ids"] == ["A-1", "A-2"]

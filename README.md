@@ -1,6 +1,6 @@
 # SOC Alert Deduplicator
 
-SOC Alert Deduplicator is an offline desktop and command-line application for turning heterogeneous security telemetry into an explainable incident queue. Version 2 detects common input formats and field layouts automatically, infers a matching profile from each batch, and groups repeated activity without requiring a source-specific configuration file.
+SOC Alert Deduplicator is an offline desktop and command-line application for turning heterogeneous security telemetry into an explainable incident queue. Version 2 detects common input formats and field layouts automatically, infers a matching profile from each batch, and groups repeated activity without requiring a source-specific configuration file. Version 2.1 adds a visual investigation workspace so analysts can understand what happened, why it matters, and why records were grouped without reading raw JSON first.
 
 ![Incident Clarity Console](docs/demo/gui-dashboard-v2.png)
 
@@ -10,8 +10,10 @@ SOC Alert Deduplicator is an offline desktop and command-line application for tu
 - Transparent schema mapping for nested and flat records, with source-format and source-record provenance on every normalized alert.
 - Adaptive field selection, evidence weights, threshold, candidate blocking, and time-window inference.
 - Conservative identity boundaries for hosts, file hashes, source processes, and target processes to prevent similarity chains from merging different activity.
-- Explainable incident metadata: match type, confidence, evidence fields, inferred profile ID, time range, and every source alert ID.
-- Responsive dark desktop interface with multi-file drag and drop, numeric sorting, search, severity filtering, JSON output, and CSV export.
+- Explainable incident metadata and exported analyst views: plain-language title, event narrative, cautious risk context, grouping reason, recommended checks, confidence, evidence fields, time range, and every source alert ID.
+- Live queue intelligence for severity distribution, host alert volume, and activity over time; all visuals react to the current search and severity filters.
+- A resizable investigation window with Overview, Timeline, Why grouped, and Source alerts tabs, plus process-to-target and grouping-decision diagrams.
+- Responsive dark desktop interface with multi-file drag and drop, numeric sorting, search, severity filtering, accessible chart descriptions, JSON output, and CSV export.
 - Local processing only. Telemetry is not sent to a service.
 
 ## Verified results
@@ -42,7 +44,9 @@ pip install -e .
 soc-alert-deduplicator-gui
 ```
 
-Select one or more telemetry files, choose an output path, and run the analysis. SMART mode is the default and requires no configuration. The **Controls** button collapses the input panel when more queue space is needed.
+Select one or more telemetry files, choose an output path, and run the analysis. SMART mode is the default and requires no configuration. Search and severity filters update both the incident table and the queue visuals. Select a row for a concise preview, then double-click it or choose **Open investigation** for the complete evidence view. The **Controls** button collapses the input panel when more queue space is needed.
+
+![Incident investigation workspace](docs/demo/incident-investigation-v2.png)
 
 Open the bundled sample immediately:
 
@@ -185,7 +189,7 @@ coverage run -m pytest
 coverage report
 ```
 
-The 252-test suite covers ingestion formats, nested mappings, compression, configuration validation, adaptive profiling, process-identity drift prevention, time boundaries, deterministic exact mode, JSON/CSV safety, package metadata, CLI behavior, and desktop interactions. Branch-aware engine coverage is enforced at 95%.
+The 262-test suite covers ingestion formats, nested mappings, compression, configuration validation, adaptive profiling, process-identity drift prevention, time boundaries, deterministic exact mode, analyst narratives, native chart rendering, investigation interactions, JSON/CSV safety, package metadata, CLI behavior, and desktop behavior. Branch-aware engine coverage is enforced at 95%.
 
 ## Documentation
 

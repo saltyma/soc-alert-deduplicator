@@ -38,7 +38,6 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QMainWindow,
     QMessageBox,
-    QPlainTextEdit,
     QPushButton,
     QScrollArea,
     QSizePolicy,
@@ -52,6 +51,15 @@ from .config import Settings, load_settings
 from .deduplication import group_alerts
 from .errors import DeduplicatorError
 from .exports import write_incidents_csv
+from .insights import (
+    alerts_for_incident,
+    build_narrative,
+    humanize_event,
+    severity_distribution,
+    timeline_buckets,
+    top_hosts,
+)
+from .investigation import HorizontalBarChart, IncidentDetailDialog, TimelineChart
 from .io import Alert, Incident, load_alerts, write_incidents
 from .smart_pipeline import SmartPipelineResult, run_smart_pipeline
 from .smart_profile import SmartProfile
@@ -72,7 +80,7 @@ DARK_STYLESHEET = """
     font-size: 13px;
     color: #E8ECF4;
 }
-QMainWindow, QWidget#appRoot {
+QMainWindow, QDialog, QWidget#appRoot {
     background: #090C12;
 }
 QFrame#header, QFrame#sidebar, QFrame#tableCard, QFrame#detailCard,
@@ -231,6 +239,32 @@ QSplitter::handle {
     width: 8px;
     height: 8px;
 }
+QTabWidget::pane {
+    border: 1px solid #222A38;
+    border-radius: 10px;
+    background: #0E131C;
+    top: -1px;
+}
+QTabBar::tab {
+    color: #8993A6;
+    background: #111620;
+    border: 1px solid #222A38;
+    padding: 9px 15px;
+    margin-right: 3px;
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+}
+QTabBar::tab:selected {
+    color: #F7F9FC;
+    background: #173A35;
+    border-color: #2D806F;
+}
+QToolTip {
+    color: #E8ECF4;
+    background: #151C28;
+    border: 1px solid #39455A;
+    padding: 6px;
+}
 QLabel#metricLabel {
     color: #8994A8;
     font-size: 10px;
@@ -366,13 +400,16 @@ class IncidentTableModel(QAbstractTableModel):
 
         if role == Qt.ItemDataRole.DisplayRole:
             if key == "event_type":
-                return str(value).replace("_", " ")
+                return humanize_event(value)
             if key == "confidence":
                 return f"{float(value):.0%}"
             if key in {"first_seen", "last_seen"}:
                 timestamp = str(value)
                 return f"{timestamp[:10]} {timestamp[11:19]}Z"
             return str(value)
+        if role == Qt.ItemDataRole.ToolTipRole:
+            narrative = build_narrative(incident)
+            return f"{narrative.title}\n\n{narrative.story}\n\nDouble-click to investigate."
         if role == Qt.ItemDataRole.UserRole:
             return incident
         if role == self.SORT_ROLE:
@@ -449,7 +486,7 @@ class MetricCard(QFrame):
     def __init__(self, label: str, accent: str, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setProperty("card", True)
-        self.setMinimumHeight(104)
+        self.setMinimumHeight(92)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(16, 14, 16, 13)
         layout.setSpacing(3)
@@ -485,6 +522,8 @@ class MainWindow(QMainWindow):
         self.last_error = ""
         self._metric_columns = 0
         self._table_toolbar_compact: bool | None = None
+        self.current_incident: Incident | None = None
+        self._detail_dialog: IncidentDetailDialog | None = None
 
         self.setWindowTitle(f"{APP_NAME} — Adaptive Incident Console")
         self.setMinimumSize(900, 620)
@@ -699,14 +738,44 @@ class MainWindow(QMainWindow):
         )
         layout.addLayout(self.metrics_grid)
         self._arrange_metric_cards(4)
+        layout.addWidget(self._build_intelligence_card())
 
         content = QSplitter(Qt.Orientation.Vertical)
         content.setChildrenCollapsible(False)
         content.addWidget(self._build_table_card())
         content.addWidget(self._build_detail_card())
-        content.setSizes([460, 230])
+        content.setSizes([430, 245])
         layout.addWidget(content, 1)
         return dashboard
+
+    def _build_intelligence_card(self) -> QFrame:
+        card = QFrame()
+        card.setProperty("card", True)
+        card.setMinimumHeight(145)
+        shell = QVBoxLayout(card)
+        shell.setContentsMargins(16, 13, 16, 12)
+        shell.setSpacing(4)
+
+        title_row = QHBoxLayout()
+        title = QLabel("Queue intelligence")
+        title.setObjectName("sectionTitle")
+        self.intelligence_note = QLabel("Current view · awaiting analysis")
+        self.intelligence_note.setProperty("muted", True)
+        title_row.addWidget(title)
+        title_row.addStretch(1)
+        title_row.addWidget(self.intelligence_note)
+        shell.addLayout(title_row)
+
+        charts = QHBoxLayout()
+        charts.setSpacing(14)
+        self.severity_chart = HorizontalBarChart("Incidents by severity")
+        self.host_chart = HorizontalBarChart("Top hosts · alert volume")
+        self.queue_timeline = TimelineChart("Alert activity")
+        charts.addWidget(self.severity_chart, 1)
+        charts.addWidget(self.host_chart, 1)
+        charts.addWidget(self.queue_timeline, 2)
+        shell.addLayout(charts, 1)
+        return card
 
     def _arrange_metric_cards(self, columns: int) -> None:
         if columns == self._metric_columns:
@@ -732,6 +801,7 @@ class MainWindow(QMainWindow):
         self.table.setColumnHidden(6, compact_table)
         self.table.setColumnHidden(7, compact_table)
         self._arrange_table_toolbar(dashboard_width < 760)
+        self.host_chart.setVisible(dashboard_width >= 760)
         self.header_subtitle.setVisible(self.width() >= 1020)
 
     def _arrange_table_toolbar(self, compact: bool) -> None:
@@ -798,6 +868,7 @@ class MainWindow(QMainWindow):
         self.table.setSelectionBehavior(QTableView.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(QTableView.SelectionMode.SingleSelection)
         self.table.setSortingEnabled(True)
+        self.table.setWordWrap(False)
         self.table.sortByColumn(2, Qt.SortOrder.DescendingOrder)
         self.table.setShowGrid(False)
         self.table.verticalHeader().setVisible(False)
@@ -822,7 +893,7 @@ class MainWindow(QMainWindow):
         layout.setSpacing(9)
 
         top = QHBoxLayout()
-        title = QLabel("Incident evidence")
+        title = QLabel("Incident preview")
         title.setObjectName("sectionTitle")
         self.detail_id = QLabel("NO SELECTION")
         self.detail_id.setObjectName("eyebrow")
@@ -831,14 +902,22 @@ class MainWindow(QMainWindow):
         top.addStretch()
         self.open_button = QPushButton("Open JSON")
         self.open_button.setEnabled(False)
-        self.copy_button = QPushButton("Copy summary")
+        self.copy_button = QPushButton("Copy brief")
         self.copy_button.setEnabled(False)
+        self.details_button = QPushButton("Open investigation")
+        self.details_button.setObjectName("primaryButton")
+        self.details_button.setEnabled(False)
+        self.details_button.setToolTip(
+            "Open the overview, timeline, grouping decision, and source alert records"
+        )
+        self.details_button.setAccessibleName("Open selected incident investigation")
         top.addWidget(self.copy_button)
         top.addWidget(self.open_button)
+        top.addWidget(self.details_button)
         layout.addLayout(top)
 
         self.empty_detail = QLabel(
-            "Select an incident to inspect its summary, normalized context, and source alert IDs."
+            "Select an incident for a plain-language explanation. Double-click a row for the full investigation."
         )
         self.empty_detail.setObjectName("emptyState")
         self.empty_detail.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -849,10 +928,17 @@ class MainWindow(QMainWindow):
         detail_layout.setContentsMargins(0, 0, 0, 0)
         detail_layout.setHorizontalSpacing(24)
         detail_layout.setVerticalSpacing(7)
+        self.detail_title = QLabel()
+        self.detail_title.setObjectName("sectionTitle")
+        self.detail_title.setWordWrap(True)
+        detail_layout.addWidget(self.detail_title, 0, 0, 1, 4)
         self.detail_summary = QLabel()
         self.detail_summary.setObjectName("detailSummary")
         self.detail_summary.setWordWrap(True)
-        detail_layout.addWidget(self.detail_summary, 0, 0, 1, 4)
+        self.detail_summary.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+        )
+        detail_layout.addWidget(self.detail_summary, 1, 0, 1, 4)
         self.detail_values: dict[str, QLabel] = {}
         for column, (label, key) in enumerate(
             (
@@ -870,17 +956,15 @@ class MainWindow(QMainWindow):
             value.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
             box.addWidget(heading)
             box.addWidget(value)
-            detail_layout.addLayout(box, 1, column)
+            detail_layout.addLayout(box, 2, column)
             self.detail_values[key] = value
-        ids_box = QVBoxLayout()
-        ids_title = QLabel("SOURCE ALERTS")
-        ids_title.setObjectName("fieldLabel")
-        self.alert_ids = QPlainTextEdit()
-        self.alert_ids.setReadOnly(True)
-        self.alert_ids.setMaximumHeight(64)
-        ids_box.addWidget(ids_title)
-        ids_box.addWidget(self.alert_ids)
-        detail_layout.addLayout(ids_box, 2, 0, 1, 4)
+        self.detail_reason = QLabel()
+        self.detail_reason.setProperty("muted", True)
+        self.detail_reason.setWordWrap(True)
+        self.detail_reason.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+        )
+        detail_layout.addWidget(self.detail_reason, 3, 0, 1, 4)
         self.detail_content.setVisible(False)
         layout.addWidget(self.detail_content, 1)
         return card
@@ -893,12 +977,15 @@ class MainWindow(QMainWindow):
         self.strategy_combo.currentIndexChanged.connect(self._strategy_changed)
         self.control_toggle.toggled.connect(self._toggle_sidebar)
         self.analyze_button.clicked.connect(self.analyze)
-        self.search_box.textChanged.connect(self.proxy.set_query)
+        self.search_box.textChanged.connect(self._search_changed)
         self.severity_filter.currentIndexChanged.connect(self._severity_changed)
         self.csv_button.clicked.connect(self._choose_csv_export)
         self.open_button.clicked.connect(self._open_output)
         self.copy_button.clicked.connect(self._copy_summary)
+        self.details_button.clicked.connect(self._open_incident_details)
         self.table.selectionModel().currentChanged.connect(self._selection_changed)
+        self.table.doubleClicked.connect(lambda _: self._open_incident_details())
+        self.table.activated.connect(lambda _: self._open_incident_details())
 
         QShortcut(QKeySequence.StandardKey.Open, self, self._choose_input)
         QShortcut(QKeySequence("Ctrl+R"), self, lambda: self.analyze())
@@ -915,6 +1002,14 @@ class MainWindow(QMainWindow):
             if (self.project_root / real_source).is_file()
             else "data/demo/raw_alerts.json"
         )
+        self.config_path.clear()
+        self.output_path.setText("output.v2.json")
+        self.strategy_combo.setCurrentIndex(0)
+
+    def _set_demo_paths(self) -> None:
+        if self.project_root is None:
+            return
+        self.input_path.setText("data/demo/raw_alerts.json")
         self.config_path.clear()
         self.output_path.setText("output.v2.json")
         self.strategy_combo.setCurrentIndex(0)
@@ -979,7 +1074,7 @@ class MainWindow(QMainWindow):
                 "Sample files are unavailable outside a source checkout."
             )
             return False
-        self._set_default_paths()
+        self._set_demo_paths()
         return self.analyze()
 
     def _strategy_changed(self) -> None:
@@ -1079,11 +1174,9 @@ class MainWindow(QMainWindow):
             )
         self._update_metrics()
         self._refresh_severity_filter()
+        self._refresh_visuals()
         self.csv_button.setEnabled(bool(incidents))
         self.open_button.setEnabled(True)
-        self.queue_note.setText(
-            f"{len(incidents)} incident groups / {len(alerts)} records preserved"
-        )
         self.status_pill.setText("COMPLETE / OFFLINE")
         if incidents:
             self.table.selectRow(0)
@@ -1129,6 +1222,53 @@ class MainWindow(QMainWindow):
     def _severity_changed(self) -> None:
         severity = self.severity_filter.currentData() or "all"
         self.proxy.set_severity(str(severity))
+        self._refresh_visuals()
+
+    def _search_changed(self, query: str) -> None:
+        self.proxy.set_query(query)
+        self._refresh_visuals()
+
+    def _visible_incidents(self) -> list[Incident]:
+        visible: list[Incident] = []
+        for row in range(self.proxy.rowCount()):
+            source = self.proxy.mapToSource(self.proxy.index(row, 0))
+            if source.isValid():
+                visible.append(self.model.incident_at(source.row()))
+        return visible
+
+    def _refresh_visuals(self) -> None:
+        visible = self._visible_incidents()
+        severities = severity_distribution(visible)
+        self.severity_chart.set_data(
+            [
+                (label, value, SEVERITY_COLORS.get(label.lower(), "#697386"))
+                for label, value in severities
+            ]
+        )
+        host_palette = ("#52D6B8", "#62C6FF", "#B393FF", "#F5C451", "#8A93A7")
+        self.host_chart.set_data(
+            [
+                (label, value, host_palette[index % len(host_palette)])
+                for index, (label, value) in enumerate(top_hosts(visible))
+            ]
+        )
+        alert_ids = {
+            str(alert_id)
+            for incident in visible
+            for alert_id in incident.get("alert_ids", [])
+        }
+        visible_alerts = [
+            alert for alert in self.alerts if str(alert.get("alert_id")) in alert_ids
+        ]
+        self.queue_timeline.set_buckets(timeline_buckets(visible_alerts))
+        incident_count = len(visible)
+        alert_count = sum(int(item.get("alert_count", 1) or 1) for item in visible)
+        self.intelligence_note.setText(
+            f"Current view · {incident_count:,} incidents / {alert_count:,} alerts"
+        )
+        self.queue_note.setText(
+            f"Showing {incident_count:,} of {len(self.incidents):,} incidents"
+        )
 
     def _selection_changed(self, current: QModelIndex, previous: QModelIndex) -> None:
         del previous
@@ -1139,8 +1279,10 @@ class MainWindow(QMainWindow):
         self._show_incident(incident)
 
     def _show_incident(self, incident: Incident) -> None:
+        self.current_incident = incident
         self.empty_detail.setVisible(False)
         self.detail_content.setVisible(True)
+        narrative = build_narrative(incident)
         confidence = float(incident.get("deduplication", {}).get("confidence", 1.0))
         self.detail_id.setText(
             f"{incident['incident_id']}  /  {str(incident['severity']).upper()}  /  "
@@ -1149,13 +1291,37 @@ class MainWindow(QMainWindow):
         self.detail_id.setStyleSheet(
             f"color: {SEVERITY_COLORS.get(str(incident['severity']), '#52D6B8')};"
         )
-        self.detail_summary.setText(str(incident["summary"]))
-        for key, label in self.detail_values.items():
-            label.setText(str(incident.get(key, "unknown")))
-        self.alert_ids.setPlainText(
-            " / ".join(str(value) for value in incident["alert_ids"])
+        self.detail_title.setText(narrative.title)
+        self.detail_summary.setText(narrative.story.split(" Observed context:", 1)[0])
+        details = incident.get("deduplication") or {}
+        fields = list(
+            details.get("evidence_fields") or incident.get("grouping_fields") or []
         )
+        shown_fields = ", ".join(str(field).replace("_", " ") for field in fields[:4])
+        remaining = f" + {len(fields) - 4} more" if len(fields) > 4 else ""
+        window = details.get("time_window_minutes")
+        timing = f" within {window:g} min" if window else ""
+        self.detail_reason.setText(
+            f"Why grouped: matched on {shown_fields or 'shared context'}{remaining}"
+            f"{timing} · {confidence:.0%} grouping confidence."
+        )
+        for key, label in self.detail_values.items():
+            label.setText(str(incident.get(key) or "Not reported"))
         self.copy_button.setEnabled(True)
+        self.details_button.setEnabled(True)
+
+    def _open_incident_details(self) -> None:
+        if self.current_incident is None:
+            return
+        if self._detail_dialog is not None and self._detail_dialog.isVisible():
+            self._detail_dialog.raise_()
+            self._detail_dialog.activateWindow()
+            return
+        source_alerts = alerts_for_incident(self.current_incident, self.alerts)
+        dialog = IncidentDetailDialog(self.current_incident, source_alerts, self)
+        self._detail_dialog = dialog
+        dialog.destroyed.connect(lambda: setattr(self, "_detail_dialog", None))
+        dialog.open()
 
     def _choose_csv_export(self) -> None:
         default = self._resolved_path(self.output_path.text()).with_suffix(".csv")
@@ -1192,8 +1358,16 @@ class MainWindow(QMainWindow):
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(output)))
 
     def _copy_summary(self) -> None:
-        QApplication.clipboard().setText(self.detail_summary.text())
-        self.status_pill.setText("SUMMARY COPIED")
+        if self.current_incident is None:
+            return
+        narrative = build_narrative(self.current_incident)
+        actions = "\n".join(f"- {item}" for item in narrative.recommended_checks)
+        QApplication.clipboard().setText(
+            f"{self.current_incident.get('incident_id')} — {narrative.title}\n\n"
+            f"{narrative.story}\n\nWhy it matters\n{narrative.why_it_matters}\n\n"
+            f"Recommended checks\n{actions}"
+        )
+        self.status_pill.setText("INCIDENT BRIEF COPIED")
 
     def dragEnterEvent(self, event: Any) -> None:
         urls = event.mimeData().urls() if event.mimeData().hasUrls() else []
@@ -1246,7 +1420,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     window = MainWindow()
     if args.demo:
-        window._set_default_paths()
+        window._set_demo_paths()
     if args.input:
         window.input_path.setText(str(args.input))
     if args.config:

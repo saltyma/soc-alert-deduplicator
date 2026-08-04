@@ -8,8 +8,9 @@ The Incident Clarity Console provides one local workflow for input selection, ad
 2. Keep **SMART / Automatic** selected, or switch to **Exact / Manual policy**.
 3. Optionally select a SMART tuning document or exact policy.
 4. Choose the JSON output path and run the analysis.
-5. Review the inferred profile, queue metrics, incidents, confidence, evidence, and source IDs.
-6. Search, filter, sort, copy a summary, open the JSON, or export CSV.
+5. Read the live severity, host-volume, and alert-activity summaries for the current view.
+6. Select an incident for a concise explanation, then double-click it or choose **Open investigation**.
+7. Review the Overview, Timeline, Why grouped, and Source alerts tabs; copy a brief, open JSON, or export CSV as needed.
 
 The profile note shows the inferred profile ID, source formats, threshold, and time window after a SMART run. Evidence-field chips update to show the fields actually selected for scoring.
 
@@ -21,6 +22,7 @@ The interface uses Qt layouts and splitters rather than fixed coordinates.
 - **Controls** collapses or restores the entire sidebar.
 - Metric cards use four columns on wide displays and a 2×2 grid when space is limited.
 - Queue controls move below the title on compact layouts.
+- The host-volume panel hides on narrow dashboards while severity and timeline context remain available.
 - First/last timestamp columns hide when the queue becomes too narrow.
 - Sidebar and dashboard widths can be adjusted with the splitter.
 - The window starts within the current screen's available geometry and supports a 900×620 minimum.
@@ -36,13 +38,25 @@ The table is backed by `QAbstractTableModel` and `QSortFilterProxyModel`. Typed 
 
 This prevents values such as `10` from appearing before `2` in ascending order. Filtering and sorting affect only the view and never rewrite the incident output.
 
+The three queue visuals follow the same filters as the table. Their titles and values are painted directly with Qt and also exposed as accessible text, so no color lookup or hover interaction is required to understand a value.
+
+## Investigation workspace
+
+The main queue uses progressive disclosure: the preview answers “what happened?” and “why was it grouped?” without filling the workspace with every raw field. The investigation window then separates deeper evidence into four tasks:
+
+- **Overview** gives the plain-language narrative, cautious risk context, process-to-target relationship, time bounds, host/user context, and recommended checks.
+- **Timeline** charts alert volume through the incident window and provides a chronological event table.
+- **Why grouped** shows the source-alert-to-incident decision flow, evidence fields, strategy, profile, continuity window, and a reminder that grouping confidence is not maliciousness probability.
+- **Source alerts** keeps a virtualized table responsive, then reveals the complete normalized record and retained source provenance for the selected row.
+
 ## Keyboard and pointer controls
 
 - `Ctrl+O`: select telemetry input.
 - `Ctrl+R`: run the current analysis.
 - Drag and drop: add one or more supported local files.
 - Column header: toggle sort order.
-- Incident row: show summary, identity context, confidence, and source IDs.
+- Incident row: show a plain-language preview and grouping reason.
+- Double-click or Enter on an incident: open the full investigation.
 
 ## Visual system
 
@@ -50,7 +64,7 @@ This prevents values such as `10` from appearing before `2` in ascending order. 
 - Mint indicates primary actions and successful local status.
 - Severity uses a consistent informational, low, medium, high, and critical palette.
 - Segoe UI is used for interface hierarchy; Consolas is reserved for identifiers and evidence.
-- Borders, spacing, and typography provide hierarchy without decorative charts or animation.
+- Charts use direct labels, restrained color, and meaningful data only; diagrams explain relationships and grouping flow instead of adding decoration.
 
 ## Data and process boundary
 

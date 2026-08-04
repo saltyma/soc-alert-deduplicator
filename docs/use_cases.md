@@ -23,13 +23,14 @@ Acceptance:
 
 ## UC-03: Review the highest-volume incidents
 
-An analyst opens the desktop queue and sorts **Alerts** descending. Values sort numerically, so 100 appears above 20 and 2. The analyst filters by severity, searches context, opens evidence, and follows source IDs back to raw output.
+An analyst opens the desktop queue and sorts **Alerts** descending. Values sort numerically, so 100 appears above 20 and 2. The analyst filters by severity, confirms that the visual totals follow the filtered queue, opens the investigation, and inspects the retained source records.
 
 Acceptance:
 
 - numeric, confidence, severity, and text sort roles are typed correctly;
 - filtering does not mutate output; and
-- selected evidence displays host, user, process, target, summary, confidence, and IDs.
+- the preview explains what happened and why records were grouped; and
+- the investigation provides risk context, timeline, diagrams, decision evidence, and complete source records.
 
 ## UC-04: Run on a compact display
 

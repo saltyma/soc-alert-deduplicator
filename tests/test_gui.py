@@ -49,7 +49,7 @@ def test_incident_model_exposes_values_headers_and_roles(qtbot: QtBot) -> None:
     assert model.columnCount() == 8
     assert model.headerData(0, Qt.Orientation.Horizontal) == "Incident"
     assert model.data(model.index(0, 0)) == "INC-001"
-    assert model.data(model.index(0, 5)) == "malware detection"
+    assert model.data(model.index(0, 5)) == "Malware detection"
     assert model.data(model.index(0, 1), Qt.ItemDataRole.ForegroundRole).isValid()
     assert model.data(model.index(0, 2), Qt.ItemDataRole.TextAlignmentRole) == (
         Qt.AlignmentFlag.AlignCenter
@@ -118,9 +118,15 @@ def test_main_window_runs_demo_filters_and_exports(
     assert all(incident["deduplication"]["engine"] == "SMART" for incident in written)
     assert output.with_suffix(".profile.json").is_file()
     assert window.detail_id.text().startswith("INC-")
+    assert window.detail_title.text()
+    assert window.details_button.isEnabled()
+    assert window.severity_chart.data_points
+    assert window.queue_timeline.buckets
+    assert "17 incidents / 40 alerts" in window.intelligence_note.text()
 
     window.search_box.setText("credential_access")
     assert window.proxy.rowCount() == 2
+    assert "2 incidents" in window.intelligence_note.text()
     window.search_box.clear()
     critical_index = window.severity_filter.findData("critical")
     window.severity_filter.setCurrentIndex(critical_index)

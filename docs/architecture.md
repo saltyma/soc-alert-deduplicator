@@ -13,8 +13,9 @@ flowchart TB
     Validate --> Profile["Adaptive profile inference"]
     Profile --> Cluster["Identity-aware clustering"]
     Cluster --> Summaries["Incident summaries"]
+    Summaries --> Insights["Analyst narratives and visual summaries"]
     Summaries --> JSON["Atomic JSON output"]
-    Summaries --> GUI
+    Insights --> GUI
     GUI --> CSV["Safe CSV export"]
     Pipeline --> Ingest
     Pipeline --> Profile
@@ -31,7 +32,9 @@ flowchart TB
 | `smart_profile.py` | Coverage and cardinality statistics, evidence-field selection, blocking fields, weights, threshold, continuity window, optional tuning |
 | `smart_deduplication.py` | Value normalization, evidence scoring, hard identity boundaries, candidate indexing, continuity checks, clustering, incident metadata |
 | `smart_pipeline.py` | End-to-end orchestration and profile sidecar generation |
-| `gui.py` | Responsive controls, queue model/view, numeric sorting, filtering, detail review, desktop actions |
+| `insights.py` | Renderer-independent titles, narratives, risk context, grouping explanations, recommendations, queue summaries, and timeline buckets |
+| `investigation.py` | Native Qt charts, relationship/grouping diagrams, source-alert model, and four-tab investigation dialog |
+| `gui.py` | Responsive controls, queue model/view, numeric sorting, filter-aware visuals, incident preview, desktop actions |
 | `config.py`, `normalization.py`, `deduplication.py`, `summaries.py` | Backward-compatible exact-policy engine |
 | `raw_import.py` | Detailed Windows Event XML and CrowdStrike mappings reused by universal ingestion |
 | `exports.py` | Atomic CSV export and formula-injection neutralization |
@@ -99,7 +102,7 @@ Each SMART incident includes:
 - host, user, process, target process, event, hash, and severity context;
 - first and last timestamps;
 - all source alert IDs;
-- human-readable summary;
+- human-readable summary and structured `analyst_view` with title, event narrative, cautious risk context, grouping reason, and recommended checks;
 - `SMART` engine marker, profile ID, match type, confidence, evidence fields, and continuity window; and
 - contributing source formats.
 
@@ -107,7 +110,9 @@ The adjacent profile document records detected input formats, paths, record coun
 
 ## Desktop architecture
 
-The queue uses `QAbstractTableModel` and `QSortFilterProxyModel`. The source model exposes typed sort data through a dedicated role, so alert counts and confidence sort numerically while severity uses a defined rank. Filtering never mutates the incident list.
+The queue uses `QAbstractTableModel` and `QSortFilterProxyModel`. The source model exposes typed sort data through a dedicated role, so alert counts and confidence sort numerically while severity uses a defined rank. Filtering never mutates the incident list. The visible proxy rows drive the severity, host-volume, and activity summaries so the table and visual counts cannot disagree.
+
+The investigation dialog applies progressive disclosure across Overview, Timeline, Why grouped, and Source alerts tabs. Custom `QPainter` widgets render dependency-light charts and diagrams while exposing equivalent accessible text. Source alerts remain in a table model rather than being expanded into thousands of widgets.
 
 Qt layouts, splitters, a scrollable control region, and width-aware rearrangement keep the application usable on compact displays. Timestamp columns hide below the useful-width threshold, metrics move from four columns to two, and queue controls stack into a second row. The sidebar can be collapsed entirely.
 
