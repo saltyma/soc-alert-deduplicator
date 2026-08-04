@@ -11,14 +11,33 @@ This tool aims to reduce alert noise by grouping duplicate or highly similar ale
 - SOC admins or detection engineers who need configurable grouping rules
 
 ## Status
-Phase 3 design artifacts are complete locally: the repository now has research-backed demo data, a benchmark oracle, an implementation architecture, and testable use cases. The core deduplication engine is next.
+Phase 4 core implementation is complete locally: the command-line MVP loads and validates alerts, normalizes grouping fields, creates deterministic exact-match incidents, aggregates severity and timestamps, and writes JSON output. The broader automated test suite is planned for Phase 5.
 
-## Planned features
-- Parse JSON alerts
-- Normalize alert fields
-- Group duplicate or near-duplicate alerts
-- Produce concise incident summaries
-- Support configurable grouping rules
+## Implemented in version 1
+
+- Parse and validate JSON alert arrays
+- Normalize configurable grouping fields
+- Group exact duplicates deterministically
+- Aggregate alert counts, timestamps, severity, and alert IDs
+- Handle omitted, null, blank, case-varied, and space-padded values
+- Reject invalid input with concise user-facing errors
+- Write complete JSON output atomically
+
+## Quick start
+
+From PowerShell in the project root:
+
+```powershell
+$env:PYTHONPATH = "src"
+python -m soc_alert_deduplicator --input data/demo/raw_alerts.json --config config.json --output output.json
+```
+
+Expected result:
+
+```text
+Processed 40 alerts into 17 incidents.
+Output written to output.json.
+```
 
 ## Design
 
