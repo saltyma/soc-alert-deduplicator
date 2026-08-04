@@ -161,6 +161,11 @@ def test_main_window_reflows_and_collapses_controls(qtbot: QtBot) -> None:
     assert window._metric_columns == 2
     assert window.table.isColumnHidden(6)
     assert window.table.isColumnHidden(7)
+    assert window.table.height() >= 150
+    assert window.preview_body.isHidden()
+    assert window.preview_pin.text() == "+"
+    assert window.metrics_body.isHidden()
+    assert window.intelligence_body.isHidden()
     assert window.analyze_button.isVisible()
 
     window.resize(1360, 850)
@@ -168,11 +173,98 @@ def test_main_window_reflows_and_collapses_controls(qtbot: QtBot) -> None:
     assert window._metric_columns == 4
     assert not window.table.isColumnHidden(6)
     assert not window.table.isColumnHidden(7)
+    assert window.metrics_body.isVisible()
+    assert window.intelligence_body.isVisible()
 
     window.control_toggle.click()
     QApplication.processEvents()
     assert not window.sidebar.isVisible()
     assert window.control_toggle.text() == "Show controls"
+
+
+def test_dashboard_sections_minimize_and_restore_independently(qtbot: QtBot) -> None:
+    window = MainWindow(PROJECT_ROOT)
+    qtbot.addWidget(window)
+    window.resize(1360, 850)
+    window.show()
+    QApplication.processEvents()
+
+    for key in ("overview", "intelligence", "queue", "preview"):
+        window._set_section_collapsed(key, False)
+        state = window._sections[key]
+        body = state["body"]
+        button = state["button"]
+        assert body.isVisible()
+        assert button.text() == "−"
+
+        button.click()
+        QApplication.processEvents()
+        assert body.isHidden()
+        assert button.text() == "+"
+        assert button.accessibleName().startswith("Restore")
+
+        button.click()
+        QApplication.processEvents()
+        assert body.isVisible()
+        assert button.text() == "−"
+        assert button.accessibleName().startswith("Minimize")
+
+    for key in ("overview", "intelligence", "queue", "preview"):
+        window._sections[key]["button"].click()
+    QApplication.processEvents()
+
+    frames = [
+        window._sections[key]["frame"]
+        for key in ("overview", "intelligence", "queue", "preview")
+    ]
+    bounds = [
+        (
+            frame.mapTo(window.dashboard, frame.rect().topLeft()).y(),
+            frame.height(),
+        )
+        for frame in frames
+    ]
+    for (top, height), (next_top, _) in zip(bounds, bounds[1:], strict=False):
+        assert 0 <= next_top - (top + height) <= 16
+    assert window.content_splitter.maximumHeight() < 180
+
+    window.metrics_pin.click()
+    QApplication.processEvents()
+    assert window.metrics_section.height() < 180
+    assert window.alert_metric.height() < 130
+
+
+def test_double_click_opens_the_clicked_incident(qtbot: QtBot, tmp_path: Path) -> None:
+    window = MainWindow(PROJECT_ROOT)
+    qtbot.addWidget(window)
+    window.input_path.setText(str(DEMO_ALERTS))
+    window.output_path.setText(str(tmp_path / "double-click-incidents.json"))
+    assert window.analyze(show_dialog=False)
+    window.resize(1360, 850)
+    window.show()
+    QApplication.processEvents()
+
+    clicked = window.proxy.index(1, 0)
+    expected = clicked.data(Qt.ItemDataRole.UserRole)
+    rectangle = window.table.visualRect(clicked)
+    qtbot.mouseClick(
+        window.table.viewport(),
+        Qt.MouseButton.LeftButton,
+        pos=rectangle.center(),
+    )
+    qtbot.mouseDClick(
+        window.table.viewport(),
+        Qt.MouseButton.LeftButton,
+        pos=rectangle.center(),
+    )
+    QApplication.processEvents()
+
+    assert window.current_incident is not None
+    assert window.current_incident["incident_id"] == expected["incident_id"]
+    assert window._detail_dialog is not None
+    assert window._detail_dialog.isVisible()
+    assert window._detail_dialog.incident["incident_id"] == expected["incident_id"]
+    window._detail_dialog.close()
 
 
 def test_gui_parser_accepts_launch_options() -> None:

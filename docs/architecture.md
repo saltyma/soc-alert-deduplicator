@@ -114,7 +114,7 @@ The queue uses `QAbstractTableModel` and `QSortFilterProxyModel`. The source mod
 
 The investigation dialog applies progressive disclosure across Overview, Timeline, Why grouped, and Source alerts tabs. Custom `QPainter` widgets render dependency-light charts and diagrams while exposing equivalent accessible text. Source alerts remain in a table model rather than being expanded into thousands of widgets.
 
-Qt layouts, splitters, a scrollable control region, and width-aware rearrangement keep the application usable on compact displays. Timestamp columns hide below the useful-width threshold, metrics move from four columns to two, and queue controls stack into a second row. The sidebar can be collapsed entirely.
+Qt layouts, splitters, a scrollable control region, and width-aware rearrangement keep the application usable on compact displays. Timestamp columns hide below the useful-width threshold, metrics move from four columns to two, and queue controls stack into a second row. The sidebar can be collapsed entirely. Major dashboard sections retain their own minimize/restore state; the preview starts minimized and the vertical splitter reallocates the released space to the incident queue. When both splitter sections are minimized, the splitter becomes fixed-height and an explicit bottom spacer receives unused height, preventing collapsed headers or summary cards from stretching.
 
 ## Determinism and failure behavior
 

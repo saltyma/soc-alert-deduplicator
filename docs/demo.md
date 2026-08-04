@@ -33,10 +33,12 @@ The desktop run demonstrates:
 - inferred evidence fields and profile metadata;
 - alert, incident, reduction, and severity metrics;
 - live severity, top-host, and alert-activity visualizations;
+- independently minimized/restored dashboard sections with queue-first default sizing;
 - numeric alert-count and confidence sorting;
 - search and severity filtering;
 - understandable incident titles, grouping reasons, and risk context;
 - a four-tab investigation view with relationship and grouping diagrams;
+- reliable row double-click opening for the selected investigation;
 - inspectable normalized source records with retained provenance;
 - JSON output and safe CSV export; and
 - collapsible, scrollable controls with responsive queue layout.

@@ -20,6 +20,9 @@ The interface uses Qt layouts and splitters rather than fixed coordinates.
 
 - The controls area scrolls independently while **Analyze telemetry** remains visible.
 - **Controls** collapses or restores the entire sidebar.
+- Queue overview, Queue intelligence, Incident queue, and Incident preview each keep a small minimize/restore control in their header.
+- Minimized sections retain their labelled header and restore icon, and the preview starts minimized so the incident table receives more height by default.
+- Collapsed headers stack with consistent spacing; unused height stays below the sections rather than stretching headers or metric cards.
 - Metric cards use four columns on wide displays and a 2×2 grid when space is limited.
 - Queue controls move below the title on compact layouts.
 - The host-volume panel hides on narrow dashboards while severity and timeline context remain available.
@@ -56,7 +59,7 @@ The main queue uses progressive disclosure: the preview answers “what happened
 - Drag and drop: add one or more supported local files.
 - Column header: toggle sort order.
 - Incident row: show a plain-language preview and grouping reason.
-- Double-click or Enter on an incident: open the full investigation.
+- Double-click or press Enter on an incident: open the full investigation for that exact row.
 
 ## Visual system
 

@@ -1,5 +1,34 @@
 # Changelog
 
+## 2.1.2 — 2026-08-04
+
+### Fixed
+
+- Collapsed section headers now stack tightly at the top instead of spreading through unused dashboard height.
+- Restoring only Queue overview keeps the metric cards at their natural compact height instead of stretching them vertically.
+- The queue/preview splitter now relinquishes its expansion role when both sections are minimized and restores it as soon as either section opens.
+- Unused height is assigned to one bottom spacer, producing a stable layout for every combination of minimized panels.
+
+### Verified
+
+- Reproduced and visually checked both reported states at 1365×768.
+- Added geometry regression assertions for header gaps, splitter height, and metric-card height.
+
+## 2.1.1 — 2026-08-04
+
+### Changed
+
+- The incident preview starts minimized so the queue receives the larger share of dashboard height and shows several rows at once.
+- Queue overview, queue intelligence, incident queue, and incident preview now have persistent minimize/restore controls; the controls sidebar retains its existing header toggle.
+- Collapsed sections keep a compact labelled header and restore icon instead of disappearing from the workspace.
+- Double-clicking a queue row now resolves and opens the exact clicked incident, independent of the previous selection.
+- The queue helper text makes the double-click investigation action discoverable.
+
+### Verified
+
+- 264 automated tests, including minimize/restore behavior and a real Qt mouse double-click on an incident row.
+- Visual verification at 1360×850 and the supported 900×620 minimum size.
+
 ## 2.1.0 — 2026-08-04
 
 ### Added

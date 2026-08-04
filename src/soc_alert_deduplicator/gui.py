@@ -13,6 +13,7 @@ from PySide6.QtCore import (
     QModelIndex,
     QPersistentModelIndex,
     QSortFilterProxyModel,
+    QTimer,
     Qt,
     QUrl,
 )
@@ -24,6 +25,7 @@ from PySide6.QtGui import (
     QIcon,
     QKeySequence,
     QResizeEvent,
+    QShowEvent,
     QShortcut,
 )
 from PySide6.QtWidgets import (
@@ -84,6 +86,7 @@ QMainWindow, QDialog, QWidget#appRoot {
     background: #090C12;
 }
 QFrame#header, QFrame#sidebar, QFrame#tableCard, QFrame#detailCard,
+QFrame#overviewSection,
 QFrame[card="true"] {
     background: #111620;
     border: 1px solid #222A38;
@@ -193,6 +196,23 @@ QPushButton#pathButton {
     max-width: 34px;
     padding: 8px 0;
 }
+QPushButton#sectionPin {
+    min-width: 28px;
+    max-width: 28px;
+    min-height: 26px;
+    max-height: 26px;
+    padding: 0;
+    color: #8FE7D2;
+    background: #101C20;
+    border-color: #29474A;
+    font-size: 16px;
+    font-weight: 700;
+}
+QPushButton#sectionPin:hover {
+    color: #07110F;
+    background: #58D7B9;
+    border-color: #58D7B9;
+}
 QPushButton:disabled {
     color: #596273;
     background: #121721;
@@ -230,7 +250,8 @@ QScrollBar::handle:vertical {
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
     height: 0;
 }
-QScrollArea#controlScroll, QScrollArea#controlScroll > QWidget > QWidget {
+QScrollArea#controlScroll, QScrollArea#controlScroll > QWidget > QWidget,
+QScrollArea#dashboardScroll, QScrollArea#dashboardScroll > QWidget > QWidget {
     background: transparent;
     border: none;
 }
@@ -521,7 +542,11 @@ class MainWindow(QMainWindow):
         self.smart_result: SmartPipelineResult | None = None
         self.last_error = ""
         self._metric_columns = 0
+        self._arranging_metric_cards = False
         self._table_toolbar_compact: bool | None = None
+        self._arranging_table_toolbar = False
+        self._sections: dict[str, dict[str, Any]] = {}
+        self._section_user_toggled: set[str] = set()
         self.current_incident: Incident | None = None
         self._detail_dialog: IncidentDetailDialog | None = None
 
@@ -561,13 +586,25 @@ class MainWindow(QMainWindow):
         self.body.setChildrenCollapsible(True)
         self.sidebar = self._build_sidebar()
         self.dashboard = self._build_dashboard()
+        self.dashboard_scroll = QScrollArea()
+        self.dashboard_scroll.setObjectName("dashboardScroll")
+        self.dashboard_scroll.setWidgetResizable(True)
+        self.dashboard_scroll.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        self.dashboard_scroll.setAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop
+        )
+        self.dashboard_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self.dashboard_scroll.setWidget(self.dashboard)
         self.body.addWidget(self.sidebar)
-        self.body.addWidget(self.dashboard)
+        self.body.addWidget(self.dashboard_scroll)
         self.body.setStretchFactor(0, 0)
         self.body.setStretchFactor(1, 1)
         self.body.setSizes([320, 1040])
         root_layout.addWidget(self.body, 1)
         self.setCentralWidget(root)
+        QTimer.singleShot(0, self._apply_responsive_layout)
 
     def _build_header(self, icon_path: Path) -> QFrame:
         header = QFrame()
@@ -721,10 +758,27 @@ class MainWindow(QMainWindow):
     def _build_dashboard(self) -> QWidget:
         dashboard = QWidget()
         layout = QVBoxLayout(dashboard)
+        self.dashboard_layout = layout
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(12)
 
-        self.metrics_grid = QGridLayout()
+        self.metrics_section = QFrame()
+        self.metrics_section.setObjectName("overviewSection")
+        self.metrics_section.setSizePolicy(
+            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed
+        )
+        metrics_shell = QVBoxLayout(self.metrics_section)
+        metrics_shell.setContentsMargins(12, 9, 12, 12)
+        metrics_shell.setSpacing(7)
+        metrics_header = QHBoxLayout()
+        metrics_title = QLabel("Queue overview")
+        metrics_title.setObjectName("sectionTitle")
+        metrics_header.addWidget(metrics_title)
+        metrics_header.addStretch(1)
+
+        self.metrics_body = QWidget()
+        self.metrics_grid = QGridLayout(self.metrics_body)
+        self.metrics_grid.setContentsMargins(0, 0, 0, 0)
         self.metrics_grid.setSpacing(10)
         self.alert_metric = MetricCard("Raw alerts", "#62C6FF")
         self.incident_metric = MetricCard("Incidents", "#B393FF")
@@ -736,22 +790,33 @@ class MainWindow(QMainWindow):
             self.reduction_metric,
             self.severity_metric,
         )
-        layout.addLayout(self.metrics_grid)
+        self.metrics_pin = self._register_section(
+            "overview", "Queue overview", self.metrics_section, self.metrics_body
+        )
+        metrics_header.addWidget(self.metrics_pin)
+        metrics_shell.addLayout(metrics_header)
+        metrics_shell.addWidget(self.metrics_body)
+        layout.addWidget(self.metrics_section)
         self._arrange_metric_cards(4)
         layout.addWidget(self._build_intelligence_card())
 
-        content = QSplitter(Qt.Orientation.Vertical)
-        content.setChildrenCollapsible(False)
-        content.addWidget(self._build_table_card())
-        content.addWidget(self._build_detail_card())
-        content.setSizes([430, 245])
-        layout.addWidget(content, 1)
+        self.content_splitter = QSplitter(Qt.Orientation.Vertical)
+        self.content_splitter.setChildrenCollapsible(False)
+        self.content_splitter.addWidget(self._build_table_card())
+        self.content_splitter.addWidget(self._build_detail_card())
+        self.content_splitter.setSizes([560, 120])
+        self.dashboard_content_index = layout.count()
+        layout.addWidget(self.content_splitter, 1)
+        self.dashboard_spacer_index = layout.count()
+        layout.addStretch(0)
+        self._set_section_collapsed("preview", True)
         return dashboard
 
     def _build_intelligence_card(self) -> QFrame:
         card = QFrame()
         card.setProperty("card", True)
         card.setMinimumHeight(145)
+        card.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         shell = QVBoxLayout(card)
         shell.setContentsMargins(16, 13, 16, 12)
         shell.setSpacing(4)
@@ -761,12 +826,19 @@ class MainWindow(QMainWindow):
         title.setObjectName("sectionTitle")
         self.intelligence_note = QLabel("Current view · awaiting analysis")
         self.intelligence_note.setProperty("muted", True)
+        self.intelligence_note.setMinimumWidth(0)
+        self.intelligence_note.setSizePolicy(
+            QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred
+        )
+        self.intelligence_note.setAlignment(Qt.AlignmentFlag.AlignRight)
         title_row.addWidget(title)
         title_row.addStretch(1)
         title_row.addWidget(self.intelligence_note)
         shell.addLayout(title_row)
 
-        charts = QHBoxLayout()
+        self.intelligence_body = QWidget()
+        charts = QHBoxLayout(self.intelligence_body)
+        charts.setContentsMargins(0, 0, 0, 0)
         charts.setSpacing(14)
         self.severity_chart = HorizontalBarChart("Incidents by severity")
         self.host_chart = HorizontalBarChart("Top hosts · alert volume")
@@ -774,27 +846,144 @@ class MainWindow(QMainWindow):
         charts.addWidget(self.severity_chart, 1)
         charts.addWidget(self.host_chart, 1)
         charts.addWidget(self.queue_timeline, 2)
-        shell.addLayout(charts, 1)
+        self.intelligence_pin = self._register_section(
+            "intelligence",
+            "Queue intelligence",
+            card,
+            self.intelligence_body,
+        )
+        title_row.addWidget(self.intelligence_pin)
+        shell.addWidget(self.intelligence_body, 1)
         return card
 
-    def _arrange_metric_cards(self, columns: int) -> None:
-        if columns == self._metric_columns:
+    def _register_section(
+        self, key: str, label: str, frame: QWidget, body: QWidget
+    ) -> QPushButton:
+        button = QPushButton("−")
+        button.setObjectName("sectionPin")
+        button.setAccessibleName(f"Minimize {label}")
+        button.setToolTip(f"Minimize {label}")
+        button.clicked.connect(
+            lambda checked=False, name=key: self._toggle_section(name)
+        )
+        self._sections[key] = {
+            "label": label,
+            "frame": frame,
+            "body": body,
+            "button": button,
+            "collapsed": False,
+            "minimum_height": frame.minimumHeight(),
+            "vertical_policy": frame.sizePolicy().verticalPolicy(),
+        }
+        return button
+
+    def _toggle_section(self, key: str) -> None:
+        self._section_user_toggled.add(key)
+        state = self._sections[key]
+        self._set_section_collapsed(key, not bool(state["collapsed"]))
+
+    def _set_section_collapsed(self, key: str, collapsed: bool) -> None:
+        state = self._sections[key]
+        frame = cast(QWidget, state["frame"])
+        body = cast(QWidget, state["body"])
+        button = cast(QPushButton, state["button"])
+        label = str(state["label"])
+        state["collapsed"] = collapsed
+        body.setVisible(not collapsed)
+        button.setText("+" if collapsed else "−")
+        action = "Restore" if collapsed else "Minimize"
+        button.setAccessibleName(f"{action} {label}")
+        button.setToolTip(f"{action} {label}")
+        policy = frame.sizePolicy()
+        if collapsed:
+            frame.setMinimumHeight(0)
+            frame_layout = frame.layout()
+            if frame_layout is not None:
+                frame_layout.invalidate()
+                frame_layout.activate()
+                frame.setMaximumHeight(frame_layout.sizeHint().height())
+            policy.setVerticalPolicy(QSizePolicy.Policy.Fixed)
+        else:
+            frame.setMaximumHeight(16777215)
+            frame.setMinimumHeight(int(state["minimum_height"]))
+            policy.setVerticalPolicy(cast(QSizePolicy.Policy, state["vertical_policy"]))
+        frame.setSizePolicy(policy)
+        frame.updateGeometry()
+        self._rebalance_content_sections()
+
+    def _rebalance_content_sections(self) -> None:
+        if not hasattr(self, "content_splitter"):
             return
-        while self.metrics_grid.count():
-            self.metrics_grid.takeAt(0)
-        for index, card in enumerate(self.metric_cards):
-            self.metrics_grid.addWidget(card, index // columns, index % columns)
-        for column in range(columns):
-            self.metrics_grid.setColumnStretch(column, 1)
+        queue_collapsed = bool(self._sections.get("queue", {}).get("collapsed"))
+        preview_collapsed = bool(self._sections.get("preview", {}).get("collapsed"))
+        splitter_policy = self.content_splitter.sizePolicy()
+        both_collapsed = queue_collapsed and preview_collapsed
+        if both_collapsed:
+            queue_frame = cast(QWidget, self._sections["queue"]["frame"])
+            preview_frame = cast(QWidget, self._sections["preview"]["frame"])
+            queue_height = min(
+                queue_frame.maximumHeight(), queue_frame.sizeHint().height()
+            )
+            preview_height = min(
+                preview_frame.maximumHeight(), preview_frame.sizeHint().height()
+            )
+            collapsed_height = (
+                queue_height + preview_height + self.content_splitter.handleWidth()
+            )
+            self.content_splitter.setMaximumHeight(collapsed_height)
+            splitter_policy.setVerticalPolicy(QSizePolicy.Policy.Fixed)
+            self.dashboard_layout.setStretch(self.dashboard_content_index, 0)
+            self.dashboard_layout.setStretch(self.dashboard_spacer_index, 1)
+        else:
+            self.content_splitter.setMaximumHeight(16777215)
+            splitter_policy.setVerticalPolicy(QSizePolicy.Policy.Expanding)
+            self.dashboard_layout.setStretch(self.dashboard_content_index, 1)
+            self.dashboard_layout.setStretch(self.dashboard_spacer_index, 0)
+        self.content_splitter.setMinimumHeight(0)
+        self.content_splitter.setSizePolicy(splitter_policy)
+        total = max(360, self.content_splitter.height())
+        if both_collapsed:
+            self.content_splitter.setSizes([queue_height, preview_height])
+        elif queue_collapsed and not preview_collapsed:
+            self.content_splitter.setSizes([56, total - 56])
+        elif preview_collapsed and not queue_collapsed:
+            self.content_splitter.setSizes([total - 56, 56])
+        elif not queue_collapsed and not preview_collapsed:
+            self.content_splitter.setSizes(
+                [max(220, int(total * 0.64)), max(150, int(total * 0.36))]
+            )
+        self.content_splitter.updateGeometry()
+
+    def _arrange_metric_cards(self, columns: int) -> None:
+        if columns == self._metric_columns or self._arranging_metric_cards:
+            return
+        self._arranging_metric_cards = True
         self._metric_columns = columns
+        try:
+            while self.metrics_grid.count():
+                self.metrics_grid.takeAt(0)
+            for index, card in enumerate(self.metric_cards):
+                self.metrics_grid.addWidget(card, index // columns, index % columns)
+            for column in range(4):
+                self.metrics_grid.setColumnStretch(column, 1 if column < columns else 0)
+        finally:
+            self._arranging_metric_cards = False
 
     def resizeEvent(self, event: QResizeEvent) -> None:
         super().resizeEvent(event)
+        self._apply_responsive_layout()
+
+    def showEvent(self, event: QShowEvent) -> None:
+        super().showEvent(event)
+        QTimer.singleShot(0, self._apply_responsive_layout)
+
+    def _apply_responsive_layout(self) -> None:
         if not hasattr(self, "dashboard"):
             return
-        dashboard_width = max(
-            self.dashboard.width(),
-            self.width() - self.sidebar.width() - 60,
+        dashboard_width = (
+            self.dashboard_scroll.viewport().width()
+            if hasattr(self, "dashboard_scroll")
+            else max(0, self.width() - self.sidebar.width() - 60)
         )
         self._arrange_metric_cards(2 if dashboard_width < 820 else 4)
         compact_table = dashboard_width < 840
@@ -802,32 +991,56 @@ class MainWindow(QMainWindow):
         self.table.setColumnHidden(7, compact_table)
         self._arrange_table_toolbar(dashboard_width < 760)
         self.host_chart.setVisible(dashboard_width >= 760)
+        self.intelligence_note.setVisible(dashboard_width >= 610)
+        compact_actions = dashboard_width < 680
+        self.detail_id.setVisible(not compact_actions)
+        self.copy_button.setVisible(not compact_actions)
+        self.open_button.setVisible(not compact_actions)
+        self.details_button.setText(
+            "Investigate" if compact_actions else "Open investigation"
+        )
+        self.csv_button.setText("CSV" if dashboard_width < 620 else "Export CSV")
+        self._update_queue_note()
         self.header_subtitle.setVisible(self.width() >= 1020)
+        compact_height = self.height() < 720
+        for key in ("overview", "intelligence"):
+            if key in self._section_user_toggled or key not in self._sections:
+                continue
+            collapsed = bool(self._sections[key]["collapsed"])
+            if compact_height != collapsed:
+                self._set_section_collapsed(key, compact_height)
 
     def _arrange_table_toolbar(self, compact: bool) -> None:
-        if self._table_toolbar_compact == compact:
+        if self._table_toolbar_compact == compact or self._arranging_table_toolbar:
             return
-        for widget in (
-            self.table_title_box,
-            self.search_box,
-            self.severity_filter,
-            self.csv_button,
-        ):
-            self.table_toolbar.removeWidget(widget)
-        for column in range(4):
-            self.table_toolbar.setColumnStretch(column, 0)
-        if compact:
-            self.table_toolbar.addWidget(self.table_title_box, 0, 0, 1, 3)
-            self.table_toolbar.addWidget(self.search_box, 1, 0)
-            self.table_toolbar.addWidget(self.severity_filter, 1, 1)
-            self.table_toolbar.addWidget(self.csv_button, 1, 2)
-        else:
-            self.table_toolbar.addWidget(self.table_title_box, 0, 0)
-            self.table_toolbar.addWidget(self.search_box, 0, 1)
-            self.table_toolbar.addWidget(self.severity_filter, 0, 2)
-            self.table_toolbar.addWidget(self.csv_button, 0, 3)
-        self.table_toolbar.setColumnStretch(0 if compact else 1, 1)
+        self._arranging_table_toolbar = True
         self._table_toolbar_compact = compact
+        try:
+            for widget in (
+                self.table_title_box,
+                self.search_box,
+                self.severity_filter,
+                self.csv_button,
+                self.queue_pin,
+            ):
+                self.table_toolbar.removeWidget(widget)
+            for column in range(5):
+                self.table_toolbar.setColumnStretch(column, 0)
+            if compact:
+                self.table_toolbar.addWidget(self.table_title_box, 0, 0, 1, 3)
+                self.table_toolbar.addWidget(self.queue_pin, 0, 3)
+                self.table_toolbar.addWidget(self.search_box, 1, 0)
+                self.table_toolbar.addWidget(self.severity_filter, 1, 1)
+                self.table_toolbar.addWidget(self.csv_button, 1, 2)
+            else:
+                self.table_toolbar.addWidget(self.table_title_box, 0, 0)
+                self.table_toolbar.addWidget(self.search_box, 0, 1)
+                self.table_toolbar.addWidget(self.severity_filter, 0, 2)
+                self.table_toolbar.addWidget(self.csv_button, 0, 3)
+                self.table_toolbar.addWidget(self.queue_pin, 0, 4)
+            self.table_toolbar.setColumnStretch(0 if compact else 1, 1)
+        finally:
+            self._arranging_table_toolbar = False
 
     def _build_table_card(self) -> QFrame:
         card = QFrame()
@@ -840,6 +1053,10 @@ class MainWindow(QMainWindow):
         self.table_toolbar.setHorizontalSpacing(10)
         self.table_toolbar.setVerticalSpacing(8)
         self.table_title_box = QWidget()
+        self.table_title_box.setMinimumWidth(0)
+        self.table_title_box.setSizePolicy(
+            QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred
+        )
         title_box = QVBoxLayout(self.table_title_box)
         title_box.setContentsMargins(0, 0, 0, 0)
         title_box.setSpacing(1)
@@ -847,20 +1064,24 @@ class MainWindow(QMainWindow):
         title.setObjectName("sectionTitle")
         self.queue_note = QLabel("Run an analysis to populate the queue")
         self.queue_note.setProperty("muted", True)
+        self.queue_note.setMinimumWidth(0)
+        self.queue_note.setSizePolicy(
+            QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred
+        )
         title_box.addWidget(title)
         title_box.addWidget(self.queue_note)
 
         self.search_box = QLineEdit()
         self.search_box.setPlaceholderText("Search incidents")
         self.search_box.setClearButtonEnabled(True)
+        self.search_box.setMinimumWidth(80)
         self.search_box.setMaximumWidth(250)
         self.severity_filter = QComboBox()
         self.severity_filter.addItem("All severities", "all")
         self.severity_filter.setMinimumWidth(145)
+        self.severity_filter.setMaximumWidth(155)
         self.csv_button = QPushButton("Export CSV")
         self.csv_button.setEnabled(False)
-        layout.addLayout(self.table_toolbar)
-        self._arrange_table_toolbar(False)
 
         self.table = QTableView()
         self.table.setModel(self.proxy)
@@ -869,6 +1090,7 @@ class MainWindow(QMainWindow):
         self.table.setSelectionMode(QTableView.SelectionMode.SingleSelection)
         self.table.setSortingEnabled(True)
         self.table.setWordWrap(False)
+        self.table.setMinimumHeight(150)
         self.table.sortByColumn(2, Qt.SortOrder.DescendingOrder)
         self.table.setShowGrid(False)
         self.table.verticalHeader().setVisible(False)
@@ -882,6 +1104,12 @@ class MainWindow(QMainWindow):
                 else QHeaderView.ResizeMode.ResizeToContents
             )
             header.setSectionResizeMode(column, mode)
+        self.queue_pin = self._register_section(
+            "queue", "Incident queue", card, self.table
+        )
+        layout.addLayout(self.table_toolbar)
+        self._table_toolbar_compact = None
+        self._arrange_table_toolbar(False)
         layout.addWidget(self.table, 1)
         return card
 
@@ -916,12 +1144,16 @@ class MainWindow(QMainWindow):
         top.addWidget(self.details_button)
         layout.addLayout(top)
 
+        self.preview_body = QWidget()
+        preview_layout = QVBoxLayout(self.preview_body)
+        preview_layout.setContentsMargins(0, 0, 0, 0)
+        preview_layout.setSpacing(9)
         self.empty_detail = QLabel(
             "Select an incident for a plain-language explanation. Double-click a row for the full investigation."
         )
         self.empty_detail.setObjectName("emptyState")
         self.empty_detail.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(self.empty_detail, 1)
+        preview_layout.addWidget(self.empty_detail, 1)
 
         self.detail_content = QWidget()
         detail_layout = QGridLayout(self.detail_content)
@@ -966,7 +1198,12 @@ class MainWindow(QMainWindow):
         )
         detail_layout.addWidget(self.detail_reason, 3, 0, 1, 4)
         self.detail_content.setVisible(False)
-        layout.addWidget(self.detail_content, 1)
+        preview_layout.addWidget(self.detail_content, 1)
+        self.preview_pin = self._register_section(
+            "preview", "Incident preview", card, self.preview_body
+        )
+        top.addWidget(self.preview_pin)
+        layout.addWidget(self.preview_body, 1)
         return card
 
     def _connect_actions(self) -> None:
@@ -984,8 +1221,8 @@ class MainWindow(QMainWindow):
         self.copy_button.clicked.connect(self._copy_summary)
         self.details_button.clicked.connect(self._open_incident_details)
         self.table.selectionModel().currentChanged.connect(self._selection_changed)
-        self.table.doubleClicked.connect(lambda _: self._open_incident_details())
-        self.table.activated.connect(lambda _: self._open_incident_details())
+        self.table.doubleClicked.connect(self._open_incident_from_index)
+        self.table.activated.connect(self._open_incident_from_index)
 
         QShortcut(QKeySequence.StandardKey.Open, self, self._choose_input)
         QShortcut(QKeySequence("Ctrl+R"), self, lambda: self.analyze())
@@ -1266,9 +1503,22 @@ class MainWindow(QMainWindow):
         self.intelligence_note.setText(
             f"Current view · {incident_count:,} incidents / {alert_count:,} alerts"
         )
-        self.queue_note.setText(
-            f"Showing {incident_count:,} of {len(self.incidents):,} incidents"
-        )
+        self._update_queue_note(incident_count)
+
+    def _update_queue_note(self, visible_count: int | None = None) -> None:
+        if not self.incidents:
+            self.queue_note.setText("Run an analysis to populate the queue")
+            return
+        count = self.proxy.rowCount() if visible_count is None else visible_count
+        if self._table_toolbar_compact:
+            self.queue_note.setText(
+                f"{count:,} of {len(self.incidents):,} · double-click to investigate"
+            )
+        else:
+            self.queue_note.setText(
+                f"Showing {count:,} of {len(self.incidents):,} incidents · "
+                "double-click a row to investigate"
+            )
 
     def _selection_changed(self, current: QModelIndex, previous: QModelIndex) -> None:
         del previous
@@ -1322,6 +1572,15 @@ class MainWindow(QMainWindow):
         self._detail_dialog = dialog
         dialog.destroyed.connect(lambda: setattr(self, "_detail_dialog", None))
         dialog.open()
+
+    def _open_incident_from_index(self, index: QModelIndex) -> None:
+        if not index.isValid():
+            return
+        source = self.proxy.mapToSource(index)
+        if not source.isValid():
+            return
+        self._show_incident(self.model.incident_at(source.row()))
+        self._open_incident_details()
 
     def _choose_csv_export(self) -> None:
         default = self._resolved_path(self.output_path.text()).with_suffix(".csv")
@@ -1434,6 +1693,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         window.resize(1360, 850)
 
     window.show()
+    app.processEvents()
+    window._apply_responsive_layout()
     app.processEvents()
     if args.screenshot:
         args.screenshot.parent.mkdir(parents=True, exist_ok=True)

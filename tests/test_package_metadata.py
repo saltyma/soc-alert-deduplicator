@@ -13,4 +13,4 @@ def test_runtime_and_project_versions_match() -> None:
         )
     )
 
-    assert __version__ == project["project"]["version"] == "2.1.0"
+    assert __version__ == project["project"]["version"] == "2.1.2"

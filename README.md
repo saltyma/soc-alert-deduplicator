@@ -13,7 +13,8 @@ SOC Alert Deduplicator is an offline desktop and command-line application for tu
 - Explainable incident metadata and exported analyst views: plain-language title, event narrative, cautious risk context, grouping reason, recommended checks, confidence, evidence fields, time range, and every source alert ID.
 - Live queue intelligence for severity distribution, host alert volume, and activity over time; all visuals react to the current search and severity filters.
 - A resizable investigation window with Overview, Timeline, Why grouped, and Source alerts tabs, plus process-to-target and grouping-decision diagrams.
-- Responsive dark desktop interface with multi-file drag and drop, numeric sorting, search, severity filtering, accessible chart descriptions, JSON output, and CSV export.
+- Independently collapsible overview, intelligence, queue, and preview sections; minimized sections keep a compact restore control, and the preview starts minimized to prioritize queue rows.
+- Responsive dark desktop interface with multi-file drag and drop, numeric sorting, search, severity filtering, row double-click investigation, accessible chart descriptions, JSON output, and CSV export.
 - Local processing only. Telemetry is not sent to a service.
 
 ## Verified results
@@ -189,7 +190,7 @@ coverage run -m pytest
 coverage report
 ```
 
-The 262-test suite covers ingestion formats, nested mappings, compression, configuration validation, adaptive profiling, process-identity drift prevention, time boundaries, deterministic exact mode, analyst narratives, native chart rendering, investigation interactions, JSON/CSV safety, package metadata, CLI behavior, and desktop behavior. Branch-aware engine coverage is enforced at 95%.
+The 264-test suite covers ingestion formats, nested mappings, compression, configuration validation, adaptive profiling, process-identity drift prevention, time boundaries, deterministic exact mode, analyst narratives, native chart rendering, section minimize/restore behavior, mouse double-click investigation, JSON/CSV safety, package metadata, CLI behavior, and desktop behavior. Branch-aware engine coverage is enforced at 95%.
 
 ## Documentation
 
